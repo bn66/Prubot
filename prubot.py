@@ -178,6 +178,14 @@ def find_corpse_cont():
     # print 'corpse_cont not found'
     return None
 
+def find_target():
+
+    for i in get_bl_creats():
+        if i.Id == player.TargetId
+            return i
+
+    return None
+
 """Functions to make various packets
 """
 def mk_itemuseon(flxyz, fsid, fsp, tlxyz, tsid, tsp):
@@ -373,7 +381,8 @@ class PQItem(PQueue):
                 # else: # Waiting
                     # self.items[flvl].append(nxt)
 
-                if player.DistanceTo(toloc) < 2: # In position: adj or on top
+                # In position: adj or on top
+                if (player.DistanceTo(toloc) < 2) and (not find_corpse_cont):
                     cn0 = len(list(inven.GetContainers()))
                     pkt.Send() # Should be sent when in position.
                     self.tryct[flvl] += 1
@@ -991,6 +1000,8 @@ class PrubotWidget(QtGui.QWidget):
         self.cb_main.stateChanged.connect(self.maincb_changed)
         self.connect(self.mlt, QtCore.SIGNAL('update()'), self.main_loop)
 
+        self.bot_status = None
+
         # All section labels
         secfont = QtGui.QFont() # Section font
         secfont.setBold(True)
@@ -1553,6 +1564,17 @@ class PrubotWidget(QtGui.QWidget):
 
         print 'self.target_priority: ', self.target_priority
 
+    def atk_chase_logic(self, chase):
+
+        if chase == 0:
+            targ = find_target()
+            targ.Approach()
+        elif chase == 1:
+            client.FollowMode = 1
+        elif chase == 2: # Use tile where the creature is?
+            #
+            pass
+
     def auto_target_logic(self):
         # True/False Conditions, then sorting conditions
         creat_list = get_bl_creats()
@@ -1585,6 +1607,9 @@ class PrubotWidget(QtGui.QWidget):
                 atk_list.sort(key=lambda x: [x[1], x[2]])
             elif self.target_priority == ['hp', 'dist']:
                 atk_list.sort(key=lambda x: [x[2], x[1]])
+            # target = atk_list[0][0]
+            player.Stop() # see how this turns out
+            # target.
             atk_list[0][0].Attack()
         else:
             pass
@@ -1598,7 +1623,8 @@ class PrubotWidget(QtGui.QWidget):
             add_conds = [c.Id not in creat_ids,
                         test_pnc(c.Id) == 'creature',
                         c.Name not in tid.creat_excl_list,
-                        c.Z == player.Z
+                        c.Z == player.Z,
+                        c.Name not in tid.creat_noloot_list
                         ]
             if all(add_conds):
                 self.loot_creats.append(c)
@@ -1728,6 +1754,7 @@ class PrubotWidget(QtGui.QWidget):
         Needs: self.corpse_cont, self.loot_cont, self.loot_bps
         """
 
+        # self.statusflag = 'looting'
         corpse_items = list(self.corpse_cont.GetItems())
         precount = len(corpse_items)
 
@@ -1834,6 +1861,7 @@ class PrubotWidget(QtGui.QWidget):
         if self.atk_cb.isChecked() == True:
             if player.TargetId != 0:
                 self.atk_logic()
+                self.atk_chase_logic(0)
             elif self.atk_atcb0.isChecked() == True: # Auto target
                 self.auto_target_logic()
             elif self.atk_atcb0.isChecked() == False: # No target, no auto targ
@@ -1964,11 +1992,15 @@ class PrubotWidget(QtGui.QWidget):
 
         self.update_plyrinfo()
 
+        self.bot_status = 'atk'
         self.attack()
+        self.bot_status = 'def'
         self.defense()
+        self.bot_status = 'loot'
         # self.support
         self.looter()
 
+        self.bot_status = 'wlkr'
         self.cavebot_walker()
 
         # self.scripts

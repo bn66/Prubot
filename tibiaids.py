@@ -222,7 +222,7 @@ loot_rares = {
 
     # Armors
     # 3370: 'knight armor',
-    3381: 'crown armor',
+    # 3381: 'crown armor',
     3386: 'dragon scale mail',
     8043: 'focus cape',
     8052: 'swamplair armor',
@@ -937,6 +937,10 @@ creat_excl_list = {
     'Fire Guardian', 'Husky', 'Raised Corpse', 'Fire Elemental',
     'Noxious Ghoul', 'Magicthrower', 'Snake', 'Cobra', 'Spit Nettle',
     'Silver Rabbit'
+    }
+
+creat_noloot_list = {
+    'Water Elemental', 'Slime', 'Son of Verminor'
     }
 
 
