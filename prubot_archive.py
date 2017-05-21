@@ -64,7 +64,6 @@ def tile_ref():
     # for items in tiles_items:
         # for item in items:
     tiles_items_ids = [[i.Id for i in j] for j in tiles_items]
-
     return tiles, tiles_items, tiles_items_ids
     # tiles_ids = [i.Id for j in tiles_items for i in j]
 
@@ -210,3 +209,11 @@ def inven_test():
     # (0, 0, 3055L, 1, 0)
     # Other containers First Container (containerId, +1, ID, containerid+64, +1)
     # Other containers Second Container (containerId, +1, ID, containerid+64, +1)
+
+def plyr_idtype_ref():
+    """Havne't figured out what these are yet
+    """
+    print player.TargetBattlelistId, 'BLID'
+    print player.TargetBattlelistType, 'BLTYPE'
+    print player.TargetId, 'ID' # Target id type...
+    print player.TargetType, 'TYPE' # Non zero, unchanging?

@@ -28,7 +28,7 @@ import tibiaids as tid
 # variables needed for all functions
 
 # Get Client
-# client = Tibia.Objects.Client.GetClients()[0]
+# client = Tibia.Objects.Client.GetClients()[1]
 client = Tibia.Util.ClientChooser.ShowBox()
 print client
 inven = client.Inventory
@@ -48,6 +48,8 @@ for i in tid.obstacle_list:
     item = Tibia.Objects.Item(client, System.UInt32(i))
     item.SetFlag(Tibia.Addresses.DatItem.Flag.BlocksPath, False)
 
+
+
 """General useful functions for working with TibiaAPI
 """
 def find_player_tile():
@@ -55,37 +57,36 @@ def find_player_tile():
 
     O(n^2) or less?
     """
-    # Unhandled Exception: System.NullReferenceException: Object reference not set to an instance of an object.
-    # at Tibia.Objects.Map.GetTileWithPlayer()
-    # at Tibia.Objects.Map.<GetTiles>d__6.MoveNext()
-    # at Python.Runtime.Iterator.tp_iternext(IntPtr ob)
-    # try:
     if client.LoggedIn:
-        # floor_tiles = list(client.Map.GetTilesOnSameFloor())
-        floor_tiles = get_floor_tiles()
-        floor_obj_data = [[i.Data for i in list(j.Objects)] for j in floor_tiles]
-        # floor_objs = [list(j.Objects) for j in floor_tiles]
-        # floor_obj_ids = [[i.Data for i in j] for j in floor_objs]
+        try:
+            # Try to catch System.NUllReferenceException race condition
+            if client.Map.GetTileWithPlayer(): #
+                floor_tiles = list(client.Map.GetTilesOnSameFloor())
+                # floor_tiles = get_floor_tiles()
+                floor_obj_data = [[i.Data for i in list(j.Objects)] for j in floor_tiles]
+                # floor_objs = [list(j.Objects) for j in floor_tiles]
+                # floor_obj_ids = [[i.Data for i in j] for j in floor_objs]
 
-        for obj in range(0, len(floor_obj_data)): # 252
-            if player.Id in floor_obj_data[obj]:
-                return floor_tiles[obj] # Player tile
-    # except:
-        # print 'FIND PLAYER TILE ERROR'
+                for obj in range(0, len(floor_obj_data)): # 252
+                    if player.Id in floor_obj_data[obj]:
+                        return floor_tiles[obj] # Player tile
+        except:
+            pass
+
     print 'Player tile not found'
     return None
 
-def get_floor_tiles():
-    # floor_tiles = list(client.Map.GetTilesOnSameFloor()) # Bugged out often
-    tiles = list(client.Map.GetTiles())
-
-    # Calculate Memory Location
-    if player.Z >= 8: # Below Ground
-        mfloor = 2
-    else:
-        mfloor = abs(player.Z - 7)
-
-    return tiles[(mfloor*252):((mfloor+1)*252)]
+# def get_floor_tiles():
+#     # floor_tiles = list(client.Map.GetTilesOnSameFloor()) # Bugged out often
+#     tiles = list(client.Map.GetTiles())
+#
+#     # Calculate Memory Location
+#     if player.Z >= 8: # Below Ground
+#         mfloor = 2
+#     else:
+#         mfloor = abs(player.Z - 7)
+#
+#     return tiles[(mfloor*252):((mfloor+1)*252)]
 
 def tile_to_rel_loc(tile, player_tile):
     """Calculates relative position of two tile objects: 'tile' to 'player_tile'
@@ -165,284 +166,50 @@ def cont_to_itemloc(container):
 
     return iloc
 
-"""Next up: maybe do the first commit,
-and then add the queue systems/objects in order to process rest of the GUI
+def find_corpse_cont():
 
-Supp: Skinning creatures.
+    for i in inven.GetContainers():
+        if (not i.HasParent) and (i.Id != inven.GetItemInSlot(3).Id):
+            return i
+        elif (i.HasParent == True) and (i.Id in tid.loot_subcont):
+            # May cause a problem if moon bp or bag open
+            return i
 
-Cavebot fix, with checks
-First commitTools/support/scripts
-"""
+    # print 'corpse_cont not found'
+    return None
 
-def get_cl():
-    creat_list = list(client.BattleList.GetCreatures())
+def find_target():
 
-    return creat_list
+    for i in get_bl_creats():
+        if i.Id == player.TargetId:
+            return i
 
-def ref():
+    return None
 
-    pass
+def get_statuses(num):
+    ps = []
 
-"""Cavebot section
-"""
-class Cavebot(object):
-    """Currently used to hold top level functions. Maybe, in the future it
-    will just
-    """
-    # Walk enumertions/directions
-    # Up = 0, Right = 1, Down = 2, Left = 3
-    # UpRight = 5, DownRight = 6, DownLeft = 7, UpLeft = 8
+    total = 16
+    enums = [2**i for i in range(total)]
+    flags = ['None', 'Poisoned', 'Burning', 'Electrified', 'Drunk',
+            'ProtectedByManaShield', 'Paralysed', 'Hasted', 'InBattle',
+            'Drowning', 'Freezing', 'Dazzled', 'Cursed', 'Buffed',
+            'CannotLogoutOrEnterProtectionZone', 'WithinProtectionZone',
+            'Bleeding']
+    enums.reverse()
+    flags.reverse()
 
-    def __init__(self, filename):
-        self.waypts = []
-        self.directory = 'cavebot/'
-        self.filename = filename
+    if num == 0:
+        return ps
 
-    def walk(self, xyz, direction):
-        """Wrapper
-        """
-        # xyz?
-        direction = int(direction)
-        player.Walk(direction)
-        # Logic? checker?
+    for i in range(total):
+        if num >= enums[i]:
+            num -= enums[i]
+            ps.append(flags[i])
 
-    def autowalk():
-        # Would send the autowalk packet, but not pathfind
-        # Overshadowed by GoTo
-        pass
+    return ps
 
-    def goto(self, xyz):
-        """TO BE IMPLEMENTED
-        Max = +/- 110 for X/Y
-        Can do stairs with this. Implement stairs based on direction facing.
-        Possible error if stairs are not on screen.
-        """
-        loc = Tibia.Objects.Location(*xyz)
-        player.GoTo = loc
 
-    def goto_face(self, xyz):
-        """TO BE IMPLEMENTED
-        Max = +/- 110 for X/Y
-        Can do stairs with this. Implement stairs based on direction facing.
-        Possible error if stairs are not on screen.
-        """
-        loc = Tibia.Objects.Location(*xyz)
-
-        # if player.Direction == 0: # Up
-        #     loc.Y -= 1
-        # elif player.Direction == 1: # Right
-        #     loc.X += 1
-        # elif player.Direction == 2: # Down
-        #     loc.Y += 1
-        # elif player.Direction == 3: # Left
-        #     loc.X -= 1
-
-        player.GoTo = loc
-
-    def usetile(self, xyz, groundid, stackpos):
-        """
-        Considering using tiles as close as possible in order to path find
-        """
-        pkt = Tibia.Packets.Outgoing.ItemUsePacket(client)
-
-        # xyz = list with world XYZ coordinates of tile
-        pkt.FromLocation = Tibia.Objects.Location(*xyz)
-        pkt.SpriteId = int(groundid) # can use zero
-        pkt.FromStackPosition = int(stackpos)
-        # Tile.Objects.StackOrder, should usually be 1 or 0
-        pkt.Index = 1
-        pkt.Send()
-
-    def hotkey_useon(self, xyz, fromid, toid):
-        """
-        """
-        pkt = Tibia.Packets.Outgoing.ItemUseOnPacket(client)
-
-        pkt.FromLocation = Tibia.Objects.ItemLocation.FromHotkey().ToLocation()
-        pkt.FromSpriteId = int(fromid)
-        pkt.FromStackPosition = 0 # Always zero for hotkey?
-        pkt.ToLocation = Tibia.Objects.Location(*xyz)
-        pkt.ToSpriteId = int(toid) # ground id
-        pkt.ToStackPosition = 0
-
-        pkt.Send()
-
-    def say(self, xyz, msg):
-        """Wrapper
-        # Think about having specific channels soon.
-        """
-        msg = str(msg)
-        client.Console.Say(msg)
-
-    def astarpathfinder():
-        # Maybe not necessary with the Use Tile function.
-        pass
-
-class CavebotWalker(Cavebot):
-    """
-    """
-
-    def __init__(self, filename):
-        super(CavebotWalker, self).__init__(filename)
-        self.load_waypts(self.directory + self.filename)
-        self.restart()
-        # self.attempts #Maybe to be implemented later to test for completion.
-
-    def load_waypts(self, filename):
-
-        with open(filename) as txt:
-            waypts = [line.rstrip('\n').split(', ') for line in txt]
-
-        # [[X,Y,Z], 'function', *[args]]
-        self.waypts = [[[int(i) for i in line[0:3]], getattr(self, line[3]),
-                        line[4:]] for line in waypts]
-
-    def next(self):
-        if self.idx < len(self.waypts) - 1:
-            self.idx += 1
-        else:
-            self.idx = 0
-        self.curr_waypt = self.waypts[self.idx]
-        # check if complete?
-
-    def go(self):
-        print self.idx, self.curr_waypt
-        xyz = self.curr_waypt[0]
-        fxn = self.curr_waypt[1]
-        args = self.curr_waypt[2]
-        fxn(xyz, *args)
-
-        self.next()
-
-    def restart(self):
-        self.idx = 0
-        self.curr_waypt = self.waypts[self.idx]
-
-class CavebotWriter(Cavebot):
-    """Uses player XYZ to set certain arguments of functions
-    """
-
-    def __init__(self, filename):
-        super(CavebotWriter, self).__init__(filename)
-
-        if isfile(self.directory + self.filename):
-            self.edit()
-        # test = True
-
-    def write_walk(self, direction):
-        waypt = [player.X, player.Y, player.Z] # Filler
-        waypt.append('walk')
-        waypt.append(direction)
-
-        self.waypts.append(waypt)
-
-        # Test
-        self.walk(waypt[0:3], direction)
-
-    def write_autowalk(self):
-        # Would send the autowalk packet, but not pathfind
-        pass
-
-    def write_goto(self):
-        waypt = [player.X, player.Y, player.Z]
-        waypt.append('goto')
-
-        self.waypts.append(waypt)
-
-        # Test
-        self.goto(waypt[0:3])
-
-    def write_goto_face(self):
-        waypt = [player.X, player.Y, player.Z]
-        waypt.append('goto')
-
-        if player.Direction == 0: # Up
-            waypt[1] -= 1
-        elif player.Direction == 1: # Right
-            waypt[0] += 1
-        elif player.Direction == 2: # Down
-            waypt[1] += 1
-        elif player.Direction == 3: # Left
-            waypt[0] -= 1
-
-        self.waypts.append(waypt)
-
-        # Test
-        self.goto(waypt[0:3])
-
-    def write_usetile(self):
-        waypt = [player.X, player.Y, player.Z]
-        waypt.append('usetile')
-        waypt.append(find_player_tile().Ground.Id)
-        # find_player_tile().Objects[0].StackOrder
-        waypt.append(0) # 0 until implementation for grates
-
-        self.waypts.append(waypt)
-
-        # Test
-        self.usetile(waypt[0:3], waypt[4], waypt[5])
-
-    def write_hotkey_useon(self, fromid):
-        """
-        """
-        waypt = [player.X, player.Y, player.Z]
-        waypt.append('hotkey_useon')
-        # waypt.append(tid.tool_list[fromid])
-        waypt.append(fromid)
-        waypt.append(find_player_tile().Ground.Id)
-        # waypt.append(0) # 0 until implementation for grates
-
-        self.waypts.append(waypt)
-
-        # Test
-        self.hotkey_useon(waypt[0:3], waypt[4], waypt[5])
-
-    def write_say(self, msg):
-        waypt = [player.X, player.Y, player.Z]
-        waypt.append('say')
-        waypt.append(msg)
-
-        self.waypts.append(waypt)
-
-        # Test
-        self.say(waypt[0:3], waypt[4])
-
-    def write_astarpathfinder():
-        # Maybe not necessary with the Use Tile function.
-        pass
-
-    def test(self):
-        # testing/performing each waypoint after?
-        pass
-
-    def save(self):
-        # Will overwrite any existing files
-        txt = open(self.directory + self.filename, 'w')
-
-        for pt in self.waypts:
-            line = ''
-            # delimiter = ', '
-            for i in pt:
-                line += str(i) + ', '
-            line = line.rstrip(', ')
-            txt.write(line + '\n') # careful about new line at the end?
-
-        txt.close()
-        print 'Waypoints saved to:', self.directory + self.filename
-
-    def del_last(self):
-        del self.waypts[-1]
-
-    def edit(self):
-        # currently, waypts read as  list of string
-        with open(self.directory + self.filename) as txt:
-            for line in txt:
-                waypt = line.rstrip('\n').split(', ')
-                self.waypts.append(waypt)
-
-    def close():
-        # might not be necessary yet.
-        pass
 
 """Testing
 """
@@ -459,6 +226,8 @@ class Simulated(object):
 
 if __name__ == '__main__':
     # sim = Simulated()
-    # super(CavebotWalker, self).__init__(filename)
-    wlkr = CavebotWalker('test.txt')
-    set_trace()
+    while True:
+        # print plyr_statuses(player.Flags)
+        ref()
+        sleep(0.5)
+        # set_trace()

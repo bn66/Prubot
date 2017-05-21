@@ -181,10 +181,34 @@ def find_corpse_cont():
 def find_target():
 
     for i in get_bl_creats():
-        if i.Id == player.TargetId
+        if i.Id == player.TargetId:
             return i
 
     return None
+
+def get_statuses(num):
+    ps = []
+
+    total = 16
+    enums = [2**i for i in range(total)]
+    flags = ['None', 'Poisoned', 'Burning', 'Electrified', 'Drunk',
+            'ProtectedByManaShield', 'Paralysed', 'Hasted', 'InBattle',
+            'Drowning', 'Freezing', 'Dazzled', 'Cursed', 'Buffed',
+            'CannotLogoutOrEnterProtectionZone', 'WithinProtectionZone',
+            'Bleeding']
+    enums.reverse()
+    flags.reverse()
+
+    if num == 0:
+        return ps
+
+    for i in range(total):
+        if num >= enums[i]:
+            num -= enums[i]
+            ps.append(flags[i])
+
+    return ps
+
 
 """Functions to make various packets
 """
@@ -382,7 +406,7 @@ class PQItem(PQueue):
                     # self.items[flvl].append(nxt)
 
                 # In position: adj or on top
-                if (player.DistanceTo(toloc) < 2) and (not find_corpse_cont):
+                if (player.DistanceTo(toloc) < 2) and (find_corpse_cont):
                     cn0 = len(list(inven.GetContainers()))
                     pkt.Send() # Should be sent when in position.
                     self.tryct[flvl] += 1
@@ -1566,17 +1590,27 @@ class PrubotWidget(QtGui.QWidget):
 
     def atk_chase_logic(self, chase):
 
-        if chase == 0:
-            targ = find_target()
-            targ.Approach()
-        elif chase == 1:
-            client.FollowMode = 1
-        elif chase == 2: # Use tile where the creature is?
-            #
-            pass
+        if self.atk_chasecb.isChecked():
+            if chase == 0:
+                targ = find_target()
+                # targ.Approach()
+                if player.DistanceTo(targ.Location) > 2:
+                    targ.Approach()
+
+            elif chase == 1:
+                client.FollowMode = 1
+            elif chase == 2: # Use tile where the creature is?
+                #
+                pass
 
     def auto_target_logic(self):
         # True/False Conditions, then sorting conditions
+
+        if 'WithinProtectionZone' in get_statuses(player.Flags):
+            return
+        if player.TargetId:
+            return
+
         creat_list = get_bl_creats()
 
         conditions = [Tibia.Objects.Creature.IsReachable
@@ -1608,7 +1642,7 @@ class PrubotWidget(QtGui.QWidget):
             elif self.target_priority == ['hp', 'dist']:
                 atk_list.sort(key=lambda x: [x[2], x[1]])
             # target = atk_list[0][0]
-            player.Stop() # see how this turns out
+            # player.Stop() # see how this turns out
             # target.
             atk_list[0][0].Attack()
         else:
@@ -1859,12 +1893,13 @@ class PrubotWidget(QtGui.QWidget):
 
     def attack(self):
         if self.atk_cb.isChecked() == True:
-            if player.TargetId != 0:
+            if player.TargetId:
                 self.atk_logic()
                 self.atk_chase_logic(0)
-            elif self.atk_atcb0.isChecked() == True: # Auto target
+            elif self.atk_atcb0.isChecked():
+                # Auto target
                 self.auto_target_logic()
-            elif self.atk_atcb0.isChecked() == False: # No target, no auto targ
+            elif not self.atk_atcb0.isChecked(): # No target, no auto targ
                 pass
         elif self.atk_cb.isChecked() == False:
             # print 'atk_cb is checked false'
@@ -1888,7 +1923,8 @@ class PrubotWidget(QtGui.QWidget):
         # Utility
         currtime = time()
         # Haste
-        if self.def_ut_hastecb.isChecked():
+        if self.def_ut_hastecb.isChecked() and \
+                (not 'WithinProtectionZone' in get_statuses(player.Flags)):
             hastetxt = str(self.def_ut_haste.currentText())
             if hastetxt != 'Haste...':
                 if hastetxt == 'utani hur':
