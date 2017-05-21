@@ -1701,7 +1701,7 @@ class PrubotWidget(QtGui.QWidget):
 
             c = self.loot_corpse_q.pop()
             # self.pqi.enq(2, ['use', [[c.X, c.Y, c.Z], 1000, 2, 0]])
-            self.pqi.enq(2, ['use', [[c.X, c.Y, c.Z], 1000, 3, 0]])
+            self.pqi.enq(2, ['use', [[c.X, c.Y, c.Z], 1000, 3, 5]])
             # Greater Wyrm?
             # self.pqi.enq(2, ['use', [[c.X, c.Y, c.Z], 8113, 2, 0]])
 
@@ -1866,7 +1866,7 @@ class PrubotWidget(QtGui.QWidget):
     def cavebot_logic(self):
 
         cb_conds = [self.pqi.isempty(), not player.IsWalking,
-                    not player.TargetId
+                    not player.TargetId, not find_corpse_cont()
                     ]
 
         # walk(self, xyz, direction), autowalk(),
@@ -2030,8 +2030,13 @@ class PrubotWidget(QtGui.QWidget):
 
         self.bot_status = 'atk'
         self.attack()
+
         self.bot_status = 'def'
         self.defense()
+        self.pqi.deq() # Extra
+        self.pqs.deq() # Extra
+        self.defense()
+
         self.bot_status = 'loot'
         # self.support
         self.looter()

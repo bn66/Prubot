@@ -212,7 +212,7 @@ loot_rares = {
     5741: 'skull helmet',
 
     # Necklaces:
-    # 3055: 'platinum amulet',
+    3055: 'platinum amulet',
     3016: 'ruby necklace',
 
     # Rings
