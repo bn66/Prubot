@@ -24,8 +24,6 @@ import tibiaids as tid
 
 """Initializations
 """
-# variables needed for all functions
-
 def injection():
     """
     """
@@ -40,7 +38,6 @@ def injection():
 
 injection()
 
-# player = client.GetPlayer()
 def bot_init():
     """Function refreshes objects that might get outdated after logging in/out
     """
@@ -80,18 +77,6 @@ def find_player_tile():
 
     print 'Player tile not found'
     return None
-
-# def get_floor_tiles():
-#     # floor_tiles = list(client.Map.GetTilesOnSameFloor()) # Bugged out often
-#     tiles = list(client.Map.GetTiles())
-#
-#     # Calculate Memory Location
-#     if player.Z >= 8: # Below Ground
-#         mfloor = 2
-#     else:
-#         mfloor = abs(player.Z - 7)
-#
-#     return tiles[(mfloor*252):((mfloor+1)*252)]
 
 def tile_to_rel_loc(tile, player_tile):
     """Calculates relative position of two tile objects: 'tile' to 'player_tile'
@@ -213,7 +198,6 @@ def get_statuses(num):
             ps.append(flags[i])
 
     return ps
-
 
 """Functions to make various packets
 """
@@ -344,16 +328,17 @@ class PQueue(object):
 
 class PQItem(PQueue):
     """ItemUseOn, ItemUseBattleList, ItemUse, ItemMove
-    0: Life: MP/HP/E-Ring (Emergency?) Attacking runes
-    1: Looter: Looting (Move Item, use item)
-    2: Looter: Walk to corpse, use corpse.
-    3: Cavebot waypoints: (Use, say?, Goto.)
+    0: Life: HP/E-Ring (Emergency?)
+    1: Life: MP, Attacking runes
+    2: Looter: Looting (Move Item, use item)
+    3: Looter: Walk to corpse, use corpse.
+    4: Cavebot waypoints: (Use, say?, Goto.)
 
     Will be a queue of lists in the format ['packettype', [args]]
     """
 
     def __init__(self):
-        levels = 4
+        levels = 5
         super(PQItem, self).__init__(levels)
         self.tryct = [0]*levels
         self.maxct = [None, None, 20, 20]
@@ -458,18 +443,18 @@ class PQItem(PQueue):
                 # Implemented instead in cavebot walker
                 pass
 
-
 class PQSay(PQueue):
     """client.Console.Say
-    0: Life: Heal spells/attack spells
-    1: Utility, spells?
+    0: Life: Heal spells
+    1: Attack spells
+    2: Utility, spells
 
     Is a queue full of strings.
     """
 
 
     def __init__(self):
-        levels = 2
+        levels = 3
         super(PQSay, self).__init__(levels)
 
     # def enq(self, obj, lvl):
@@ -1033,7 +1018,7 @@ class PrubotWidget(QtGui.QWidget):
         pb_inj = QtGui.QPushButton('Re-inject')
         pb_inj.clicked.connect(injection)
 
-        self.bot_status = None
+        # self.bot_status = None
 
         # All section labels
         secfont = QtGui.QFont() # Section font
@@ -1383,9 +1368,6 @@ class PrubotWidget(QtGui.QWidget):
             self.mlt._runflag_ = False
             # self.mlt.quit()
 
-    def atkcb_changed(self):
-        pass
-
     def sel_type(self, loc):
         # 'type' combox activated, select type
         self.update_idcombox(loc)
@@ -1506,48 +1488,49 @@ class PrubotWidget(QtGui.QWidget):
             pass
         elif id_txt == 'Select...':
             pass
-        elif (type_txt == 'Spell') & (loc <= 1):
+        elif (type_txt == 'Spell'):
             if id_txt == 'Other...':
                 arg = id_le_txt
             else:
                 arg = id_txt
+            if loc <= 1: # From Attack
+                self.pqs.enq(1, arg)
+            elif loc <= 3: # From Defense, HP
                 self.pqs.enq(0, arg)
-        elif (type_txt == 'Spell') & (loc > 1):
-            if id_txt == 'Other...':
-                arg = id_le_txt
-            else:
-                arg = id_txt
-                self.pqs.enq(0, arg)
-        elif (type_txt == 'Rune') & (loc <= 1):
+            elif loc <= 4: # From Defense, MP
+                self.pqs.enq(1, arg)
+        elif (type_txt == 'Rune'):
             if id_txt == 'Other...':
                 runeid = id_le_txt
             else:
-                runeid = tid.atk_runes[id_txt]
-                obj = ['hotkey', [runeid, 'target']]
-                self.pqi.enq(0, obj)
-        elif (type_txt == 'Rune') & (loc > 1):
-            if id_txt == 'Other...':
-                runeid = id_le_txt
-            else:
-                runeid = tid.def_runes[id_txt]
-                obj = ['hotkey', [runeid, 'yourself']]
-                self.pqi.enq(0, obj)
-        # elif (type_txt == 'Pot') & (loc <= 1): # No attack pots
-            # print 'pqi eqn arg'
-            # if id_txt == 'Other...':
-            #     potid = id_le_txt
-            # else:
-            #     potid = tid.def_pots[id_txt]
-            #     obj = ['hotkey', [potid, 'target']]
-            #     print obj
-            #     self.pqi.enq(0, obj)
+                if loc <= 1 : # Attack Runes
+                    runeid = tid.atk_runes[id_txt]
+                    obj = ['hotkey', [runeid, 'target']]
+                elif loc <= 4:
+                    runeid = tid.def_runes[id_txt]
+                    obj = ['hotkey', [runeid, 'yourself']]
+            if loc <= 1: # From Attack
+                self.pqi.enq(1, arg)
+            elif loc <= 3: # From Defense, HP
+                self.pqi.enq(0, arg)
+            elif loc <= 4: # From Defense, MP
+                self.pqi.enq(1, arg)
         elif (type_txt == 'Pot') & (loc > 1):
             if id_txt == 'Other...':
                 potid = id_le_txt
             else:
-                potid = tid.def_pots[id_txt]
-                obj = ['hotkey', [potid, 'yourself']]
-                self.pqi.enq(0, obj)
+                if loc <= 1 : # Attack Runes
+                    # obj = ['hotkey', [potid, 'target']]
+                    pass # No attack pots
+                elif loc <= 4:
+                    potid = tid.def_pots[id_txt]
+                    obj = ['hotkey', [potid, 'yourself']]
+            if loc <= 1: # From Attack
+                self.pqi.enq(1, arg)
+            elif loc <= 3: # From Defense, HP
+                self.pqi.enq(0, arg)
+            elif loc <= 4: # From Defense, MP
+                self.pqi.enq(1, arg)
 
     def aoe_logic(self):
         xy_max = self.atk_aoesb2.value()
@@ -1708,13 +1691,9 @@ class PrubotWidget(QtGui.QWidget):
 
         # FIFO, list should be empty after this loop
         for i in range(0, len(self.loot_corpse_q)):
-            # 1 and 2 should work as args, but better implementation possible
-
+            # Opens on container 5, hopefully it's enough.
             c = self.loot_corpse_q.pop()
-            # self.pqi.enq(2, ['use', [[c.X, c.Y, c.Z], 1000, 2, 0]])
-            self.pqi.enq(2, ['use', [[c.X, c.Y, c.Z], 1000, 3, 5]])
-            # Greater Wyrm?
-            # self.pqi.enq(2, ['use', [[c.X, c.Y, c.Z], 8113, 2, 0]])
+            self.pqi.enq(3, ['use', [[c.X, c.Y, c.Z], 1000, 3, 5]])
 
     def reset_loot_logic1(self):
         self.idx_rare = 0
@@ -1783,7 +1762,7 @@ class PrubotWidget(QtGui.QWidget):
         toloc = Location object to move item.
         """
         itemloc = item.Location.ToLocation()
-        self.pqi.enq(1, ['move', [[itemloc.X, itemloc.Y, itemloc.Z],
+        self.pqi.enq(2, ['move', [[itemloc.X, itemloc.Y, itemloc.Z],
                                 item.Id, itemloc.Z,
                                 [toloc.X, toloc.Y, toloc.Z],
                                 item.Count
@@ -1951,7 +1930,7 @@ class PrubotWidget(QtGui.QWidget):
                     hastecd = 10
 
                 if currtime - self.hastetime > hastecd - 1.5:
-                    self.pqs.enq(1, hastetxt)
+                    self.pqs.enq(2, hastetxt)
                     self.hastetime = time()
             else:
                 pass
@@ -1962,7 +1941,7 @@ class PrubotWidget(QtGui.QWidget):
             inviscd = 200
 
             if currtime - self.invistime > inviscd - 10:
-                self.pqs.enq(1, invistxt)
+                self.pqs.enq(2, invistxt)
                 self.invistime = time()
 
         # Custom
@@ -1971,7 +1950,7 @@ class PrubotWidget(QtGui.QWidget):
             custcd = self.def_ut_custsb.value()
 
             if currtime - self.custtime > custcd - 0:
-                self.pqs.enq(1, custtxt)
+                self.pqs.enq(2, custtxt)
                 self.custtime = time()
 
     def looter(self):
@@ -2042,20 +2021,20 @@ class PrubotWidget(QtGui.QWidget):
 
         self.update_plyrinfo()
 
-        self.bot_status = 'atk'
+        # self.bot_status = 'atk'
         self.attack()
 
-        self.bot_status = 'def'
+        # self.bot_status = 'def'
         self.defense()
         self.pqi.deq() # Extra
         self.pqs.deq() # Extra
         self.defense()
 
-        self.bot_status = 'loot'
+        # self.bot_status = 'loot'
         # self.support
         self.looter()
 
-        self.bot_status = 'wlkr'
+        # self.bot_status = 'wlkr'
         self.cavebot_walker()
 
         # self.scripts
