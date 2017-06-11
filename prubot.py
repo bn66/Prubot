@@ -330,9 +330,9 @@ class PQItem(PQueue):
     """ItemUseOn, ItemUseBattleList, ItemUse, ItemMove
     0: Life: HP/E-Ring (Emergency?)
     1: Life: MP, Attacking runes
-    2: Looter: Looting (Move Item, use item)
+    2: Looter: Looting (Move Item, use item); Support: empty vials
     3: Looter: Walk to corpse, use corpse.
-    4: Cavebot waypoints: (Use, say?, Goto.)
+    4: Cavebot waypoints: (Use, say?, Goto.) # Currently unused
 
     Will be a queue of lists in the format ['packettype', [args]]
     """
@@ -380,13 +380,16 @@ class PQItem(PQueue):
             pkt = fxn(*args)
 
             # Test pkt.Send() for completion.
-            if flvl == 0: # 0: Life: MP/HP/E-Ring, atk runes
+            if flvl == 0: # 0: Life: HP/E-Ring (Emergency?)
                 # Spam them? Send packets twice?
                 pkt.Send()
-            elif flvl == 1: # 1: Looter: Looting (Move Item, use item)
+            elif flvl == 1: # 1: Life: MP, Attacking runes
                 # Should run until completion.
                 pkt.Send()
-            elif flvl == 2: # 2: Looter: Walk to corpse, use corpse.
+            elif flvl == 2: # 2: Looter: (Move Item, use item); Support: EV
+                # Should run until completion.
+                pkt.Send()
+            elif flvl == 3: # 3: Looter: Walk to corpse, use corpse.
                 # count containers and check that it has changed
                 toloc = Tibia.Objects.Location(*args[0])
                 # if (not player.IsWalking) & (not player.TargetId): # and (not player.TargetId)
@@ -439,7 +442,7 @@ class PQItem(PQueue):
                 # 82 73 7D B0 79 00 00 00 01 00
                 # 82 73 7D B0 79 00 74 1C 01 03
 
-            elif flvl == 3: # 3: Cavebot waypoints: (Use, say?, Goto.)
+            elif flvl == 4: # 4: Cavebot waypoints: (Use, say?, Goto.)
                 # Implemented instead in cavebot walker
                 pass
 
@@ -1181,7 +1184,9 @@ class PrubotWidget(QtGui.QWidget):
 
         # Support Section
         # supp_pots = QtGui.QPushButton('Pots')
-        supp_mi = QtGui.QPushButton('Move Item')
+        # supp_mi = QtGui.QPushButton('Move Item')
+        self.supp_ev = QtGui.QCheckBox('Empty Vials')
+        self.supp_gold = QtGui.QCheckBox('Change Gold')
 
         # Looter Section
         self.loot_findcb = QtGui.QCheckBox('Find Corpse On')
@@ -1243,7 +1248,8 @@ class PrubotWidget(QtGui.QWidget):
 
         # Support
         vbox_supp = QtGui.QVBoxLayout()
-        vbox_supp.addWidget(supp_mi)
+        vbox_supp.addWidget(self.supp_ev)
+        vbox_supp.addWidget(self.supp_gold)
         # vbox_supp.addWidget(supp_invis)
         vbox_supp.addStretch(1)
 
@@ -1510,11 +1516,11 @@ class PrubotWidget(QtGui.QWidget):
                     runeid = tid.def_runes[id_txt]
                     obj = ['hotkey', [runeid, 'yourself']]
             if loc <= 1: # From Attack
-                self.pqi.enq(1, arg)
+                self.pqi.enq(1, obj)
             elif loc <= 3: # From Defense, HP
-                self.pqi.enq(0, arg)
+                self.pqi.enq(0, obj)
             elif loc <= 4: # From Defense, MP
-                self.pqi.enq(1, arg)
+                self.pqi.enq(1, obj)
         elif (type_txt == 'Pot') & (loc > 1):
             if id_txt == 'Other...':
                 potid = id_le_txt
@@ -1526,11 +1532,11 @@ class PrubotWidget(QtGui.QWidget):
                     potid = tid.def_pots[id_txt]
                     obj = ['hotkey', [potid, 'yourself']]
             if loc <= 1: # From Attack
-                self.pqi.enq(1, arg)
+                self.pqi.enq(1, obj)
             elif loc <= 3: # From Defense, HP
-                self.pqi.enq(0, arg)
+                self.pqi.enq(0, obj)
             elif loc <= 4: # From Defense, MP
-                self.pqi.enq(1, arg)
+                self.pqi.enq(1, obj)
 
     def aoe_logic(self):
         xy_max = self.atk_aoesb2.value()
@@ -1884,6 +1890,31 @@ class PrubotWidget(QtGui.QWidget):
                 # Try Again
                 self.wlkr.moveto_waypt(cidx)
 
+    def supp_empty_vials(self):
+        pbp_items = list(find_player_bp().GetItems())
+
+        for i in pbp_items:
+            if i.Id in tid.empty_vials:
+                if i.Count == 100:
+                    iloc = i.Location.ToLocation()
+                    toloc = player.Location
+                    self.pqi.enq(2, ['move', [[iloc.X, iloc.Y, iloc.Z],
+                                            i.Id, iloc.Z,
+                                            [toloc.X, toloc.Y, toloc.Z],
+                                            i.Count
+                                            ]])
+
+
+    def supp_gold_changer(self):
+        pbp_items = list(find_player_bp().GetItems())
+
+        for i in pbp_items:
+            if i.Id in [3031, 3035, 3043]:
+                if i.Count == 100:
+                    # print 'exchanging gold'
+                    # Shouldn't need to enq it
+                    i.Use()
+
     def attack(self):
         if self.atk_cb.isChecked() == True:
             if player.TargetId:
@@ -1972,6 +2003,14 @@ class PrubotWidget(QtGui.QWidget):
             else: # No Corpse Open
                 pass
 
+    def support(self):
+
+        if self.supp_ev.isChecked() == True:
+            self.supp_empty_vials()
+
+        if self.supp_gold.isChecked() == True:
+            self.supp_gold_changer()
+
     def cavebot_load(self):
         fname = QtGui.QFileDialog.getOpenFileName(
                 self, 'Open Cavebot Waypoints...', 'cavebot/'
@@ -2031,8 +2070,10 @@ class PrubotWidget(QtGui.QWidget):
         self.defense()
 
         # self.bot_status = 'loot'
-        # self.support
         self.looter()
+
+        # self.bot_status = 'supp'
+        self.support()
 
         # self.bot_status = 'wlkr'
         self.cavebot_walker()

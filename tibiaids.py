@@ -360,8 +360,15 @@ for i in [skin_obsidian, skin_stake, skin_fish]:
     for key, value in i.iteritems():
         skin_list[key] = value
 
+"""Other Dictionaries
+"""
+empty_vials = {
+    283: 'empty potion flask',
+    284: 'empty potion flask',
+    285: 'empty potion flask'
+    }
 
-"""Various LIsts of things that are convenient
+"""Various Lists of things that are convenient
 """
 # Blood after something has died
 blood_list = {
@@ -942,7 +949,6 @@ creat_excl_list = {
 creat_noloot_list = {
     'Water Elemental', 'Slime', 'Son of Verminor'
     }
-
 
 # list of things to ignore in pathing
 # http://tibia.wikia.com/wiki/Category:Path-Blocking_Items
