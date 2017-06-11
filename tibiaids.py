@@ -112,8 +112,8 @@ loot_stack = {
     # 3731: 'fire mushroom',
     # 3732: 'green mushroom',
     7158: 'rainbow trout',
-    7159: 'green perch',
-    8014: 'cucumber'
+    7159: 'green perch'
+    # 8014: 'cucumber'
     }
 
 loot_commons = {
@@ -123,7 +123,7 @@ loot_commons = {
     3081: 'stone skin amulet',
 
     # 4831: 'old parchment'
-    # 2903: 'golden mug'
+    2903: 'golden mug',
     # 3407: 'charmer\'s tiara'
     7439: 'berserk potion',
     9056: 'black skull',
@@ -167,7 +167,7 @@ loot_rares = {
     3324: 'skull staff',
 
     # Swords
-    3280: 'fire sword',
+    # 3280: 'fire sword',
     3281: 'giant sword',
     7386: 'mercenary sword',
     7402: 'dragon slayer',
@@ -212,7 +212,7 @@ loot_rares = {
     5741: 'skull helmet',
 
     # Necklaces:
-    3055: 'platinum amulet',
+    # 3055: 'platinum amulet',
     3016: 'ruby necklace',
 
     # Rings

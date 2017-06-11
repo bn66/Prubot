@@ -1,6 +1,5 @@
 """Prubot
 
-
 """
 import pythoncom
 pythoncom.CoInitialize() # To import CLR with PyQt4 without OLE Error
@@ -27,11 +26,19 @@ import tibiaids as tid
 """
 # variables needed for all functions
 
-# Get Client
-# client = Tibia.Objects.Client.GetClients()[1]
-client = Tibia.Util.ClientChooser.ShowBox()
-print client
-inven = client.Inventory
+def injection():
+    """
+    """
+    global client
+    global inven
+
+    # Get Client
+    # client = Tibia.Objects.Client.GetClients()[1]
+    client = Tibia.Util.ClientChooser.ShowBox()
+    print client
+    inven = client.Inventory
+
+injection()
 
 # player = client.GetPlayer()
 def bot_init():
@@ -47,8 +54,6 @@ bot_init()
 for i in tid.obstacle_list:
     item = Tibia.Objects.Item(client, System.UInt32(i))
     item.SetFlag(Tibia.Addresses.DatItem.Flag.BlocksPath, False)
-
-
 
 """General useful functions for working with TibiaAPI
 """
@@ -1024,6 +1029,10 @@ class PrubotWidget(QtGui.QWidget):
         self.cb_main.stateChanged.connect(self.maincb_changed)
         self.connect(self.mlt, QtCore.SIGNAL('update()'), self.main_loop)
 
+        # Reinjection button
+        pb_inj = QtGui.QPushButton('Re-inject')
+        pb_inj.clicked.connect(injection)
+
         self.bot_status = None
 
         # All section labels
@@ -1313,6 +1322,7 @@ class PrubotWidget(QtGui.QWidget):
 
         grid0.addWidget(lbl_info, 0, 0)
         grid0.addWidget(self.cb_main, 0, 1)
+        grid0.addWidget(pb_inj, 0, 2)
         grid0.addLayout(hbox_info, 1, 0, 1, 3)
         grid0.addWidget(lbl_atk, 2, 0)
         grid0.addLayout(hbox_atk, 3, 0, 1, 2)
@@ -1615,6 +1625,7 @@ class PrubotWidget(QtGui.QWidget):
 
         conditions = [Tibia.Objects.Creature.IsReachable
             # Tibia.Objects.Creature.IsAttacking
+            # Tibia.Objects.Creature.IsBlocking
             ]
 
         # Make the list of attackable creatures
@@ -1883,8 +1894,11 @@ class PrubotWidget(QtGui.QWidget):
             self.wlkr.go()
 
             # Only tests the "Go"
+            # No failsafe built in.
             if player.DistanceTo(toloc) == 0:
                 print 'ONTOP OF TILE'
+            elif player.Z != toloc.Z:
+                print 'CHANGED FLOORS'
             elif player.DistanceTo(toloc) < 2:
                 print 'ADJACENT TO TILE'
             else:
