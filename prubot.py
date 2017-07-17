@@ -36,6 +36,11 @@ def injection():
     print client
     inven = client.Inventory
 
+    # Remove path blocking objects
+    for i in tid.obstacle_list:
+        item = Tibia.Objects.Item(client, System.UInt32(i))
+        item.SetFlag(Tibia.Addresses.DatItem.Flag.BlocksPath, False)
+
 injection()
 
 def bot_init():
@@ -46,11 +51,6 @@ def bot_init():
     player = client.GetPlayer()
 
 bot_init()
-
-# Remove path blocking objects
-for i in tid.obstacle_list:
-    item = Tibia.Objects.Item(client, System.UInt32(i))
-    item.SetFlag(Tibia.Addresses.DatItem.Flag.BlocksPath, False)
 
 """General useful functions for working with TibiaAPI
 """
@@ -108,6 +108,63 @@ def tile_to_rel_loc(tile, player_tile):
     zloc = zmdiff
 
     return (xloc, yloc, zloc)
+
+def rel_to_tile(relx, rely, relz = 0):
+    """Takes positions relative to player and returns the corresponding tile.
+    relz not implemented.
+    """
+    xbound = (-8, 9)
+    ybound = (-6, 7)
+    # zbound = ()
+
+    # Out of bounds check
+    if (relx < xbound[0]) or (relx > xbound[1]):
+        print 'relx out of bounds'
+        return
+    if (rely < ybound[0]) or (rely > ybound[1]):
+        print 'rely out of bounds'
+        return
+    # if (relx < xbound[0]) or (relx > xbound[1]):
+        # print 'relx out of bounds'
+        # return
+
+    pt = find_player_tile()
+    floor_tiles = [i for i in client.Map.GetTilesOnSameFloor()] # 2D
+    pt_no = pt.TileNumber
+
+
+    # Find relative location of tile_no in memory
+    dx = pt.MemoryLocation.X + relx
+    dy = pt.MemoryLocation.Y + rely
+
+    # Adjust memory locations
+    adjx = dx
+    adjy = dy
+    if (dx < 0):
+        adjx = dx + 18
+    elif (dx > 17): # out of bounds, flip
+        adjx = dx - 18
+    if (dy < 0):
+        adjy = dy + 14
+    elif (dy > 13): # out of bounds, flip
+        adjy = dy - 14
+
+    # correct tile
+    corr_tile = 1*adjx + 18*adjy
+
+    return floor_tiles[corr_tile]
+
+def get_adj_tiles():
+    adj_tiles = []
+    adj_coord = [(-1, -1), (0, -1), (+1, -1),
+                 (-1, +0), (0, +0), (+1, +0),
+                 (-1, +1), (0, +1), (+1, +1)]
+    adj_coord.remove((0, +0)) # Can comment out later or add functionality
+
+    for relxy in adj_coord:
+        adj_tiles.append(rel_to_tile(*relxy))
+
+    return adj_tiles
 
 def tile_to_world_loc(tile, player_tile):
     """Calculates the global position of 'tile', using relative position to
@@ -1017,10 +1074,6 @@ class PrubotWidget(QtGui.QWidget):
         self.cb_main.stateChanged.connect(self.maincb_changed)
         self.connect(self.mlt, QtCore.SIGNAL('update()'), self.main_loop)
 
-        # Reinjection button
-        pb_inj = QtGui.QPushButton('Re-inject')
-        pb_inj.clicked.connect(injection)
-
         # self.bot_status = None
 
         # All section labels
@@ -1198,8 +1251,14 @@ class PrubotWidget(QtGui.QWidget):
         self.loot_creats = []
         self.loot_corpse_q = []
 
-        tools_floorspy = QtGui.QPushButton('Floorspy')
-        tools_namespy = QtGui.QPushButton('Namespy')
+        self.tools_ls_cb = QtGui.QCheckBox('Level Spy')
+        self.tools_ls_cb.stateChanged.connect(self.tools_ls_fxn)
+        self.tools_ls_sb = QtGui.QSpinBox(self)
+        self.tools_ls_sb.setMaximum(8)
+        self.tools_ls_sb.setMinimum(-3)
+        self.tools_ls_sb.valueChanged.connect(self.tools_ls_fxn)
+        self.tools_namespy = QtGui.QCheckBox('Namespy')
+        self.tools_namespy.stateChanged.connect(self.tools_ns_sc)
         tools_mwtimer = QtGui.QPushButton('Magic Wall Timer')
         tools_wgtimer = QtGui.QPushButton('Wild Growth Timer')
         script_test = QtGui.QPushButton('Script Test')
@@ -1287,8 +1346,12 @@ class PrubotWidget(QtGui.QWidget):
 
         # Tools
         vbox_tools = QtGui.QVBoxLayout()
-        vbox_tools.addWidget(tools_floorspy)
-        vbox_tools.addWidget(tools_namespy)
+        hbox_tools_ls = QtGui.QHBoxLayout()
+        hbox_tools_ls.addWidget(self.tools_ls_cb)
+        hbox_tools_ls.addWidget(self.tools_ls_sb)
+        vbox_tools.addLayout(hbox_tools_ls)
+        vbox_tools.addWidget(self.tools_namespy)
+        vbox_tools.addWidget(self.tools_namespy)
         vbox_tools.addWidget(tools_mwtimer)
         vbox_tools.addWidget(tools_wgtimer)
         vbox_tools.addStretch(1)
@@ -1313,7 +1376,6 @@ class PrubotWidget(QtGui.QWidget):
 
         grid0.addWidget(lbl_info, 0, 0)
         grid0.addWidget(self.cb_main, 0, 1)
-        grid0.addWidget(pb_inj, 0, 2)
         grid0.addLayout(hbox_info, 1, 0, 1, 3)
         grid0.addWidget(lbl_atk, 2, 0)
         grid0.addLayout(hbox_atk, 3, 0, 1, 2)
@@ -1367,6 +1429,7 @@ class PrubotWidget(QtGui.QWidget):
         if self.cb_main.isChecked() == True:
             # print 'main_loop checked is true, mlt start'
             bot_init()
+            # self.setWindowTitle('Prubot' + player.Name)
             self.mlt._runflag_ = True
             self.mlt.start()
         elif self.cb_main.isChecked() == False:
@@ -1641,10 +1704,13 @@ class PrubotWidget(QtGui.QWidget):
                 atk_list.sort(key=lambda x: [x[1], x[2]])
             elif self.target_priority == ['hp', 'dist']:
                 atk_list.sort(key=lambda x: [x[2], x[1]])
-            # target = atk_list[0][0]
             # player.Stop() # see how this turns out
-            # target.
             atk_list[0][0].Attack()
+
+            player.GoToX = 0 # Should be enough
+            # pkt = Tibia.Packets.Outgoing.AutoWalkCancelPacket(client)
+            # pkt.Send()
+
         else:
             pass
 
@@ -1904,7 +1970,6 @@ class PrubotWidget(QtGui.QWidget):
                                             i.Count
                                             ]])
 
-
     def supp_gold_changer(self):
         pbp_items = list(find_player_bp().GetItems())
 
@@ -1914,6 +1979,22 @@ class PrubotWidget(QtGui.QWidget):
                     # print 'exchanging gold'
                     # Shouldn't need to enq it
                     i.Use()
+
+    def tools_ls_fxn(self):
+        if self.tools_ls_cb.isChecked() == True:
+            # floor = int(self.tools_fs_sb.value())
+            floor = self.tools_ls_sb.value()
+            client.Map.LevelSpyOn(floor)
+        elif self.tools_ls_cb.isChecked() == False:
+            client.Map.LevelSpyOff()
+
+    def tools_ns_sc(self):
+        """NameSpy StateChanged
+        """
+        if self.tools_namespy.isChecked() == True:
+            client.Map.NameSpyOn()
+        elif self.tools_namespy.isChecked() == False:
+            client.Map.NameSpyOff()
 
     def attack(self):
         if self.atk_cb.isChecked() == True:
@@ -2067,7 +2148,7 @@ class PrubotWidget(QtGui.QWidget):
         self.defense()
         self.pqi.deq() # Extra
         self.pqs.deq() # Extra
-        self.defense()
+        # self.defense()
 
         # self.bot_status = 'loot'
         self.looter()
@@ -2077,6 +2158,9 @@ class PrubotWidget(QtGui.QWidget):
 
         # self.bot_status = 'wlkr'
         self.cavebot_walker()
+
+        # self.bot_status = 'tool'
+        # self.tools()
 
         # self.scripts
 
@@ -2100,7 +2184,7 @@ class PrubotWidget(QtGui.QWidget):
         settings.setValue('atk_type', self.atk_type.currentIndex())
         settings.setValue('atk_id', self.atk_id.currentIndex())
         settings.setValue('atk_id_le', self.atk_id_le.text())
-        settings.setValue('atk_atcb0', self.atk_atcb0.checkState())
+        # settings.setValue('atk_atcb0', self.atk_atcb0.checkState())
         settings.setValue('atk_atcb1', self.atk_cb.checkState())
         settings.setValue('atk_atcb2', self.atk_cb.checkState())
         settings.setValue('target_priority', str(self.target_priority)) # care
@@ -2130,6 +2214,13 @@ class PrubotWidget(QtGui.QWidget):
         settings.setValue('def_ut_custcb', self.def_ut_custcb.checkState())
         settings.setValue('def_ut_custsb', self.def_ut_custsb.value())
         settings.setValue('def_ut_custle', self.def_ut_custle.text())
+
+        # Support
+        settings.setValue('supp_ev', self.supp_ev.checkState())
+        settings.setValue('supp_gold', self.supp_gold.checkState())
+
+        # Tools
+        settings.setValue('tools_namespy', self.tools_namespy.checkState())
 
         # Spaceholder for next section
 
@@ -2210,14 +2301,19 @@ class PrubotWindow(QtGui.QMainWindow):
 
         self.widget1 = PrubotWidget()
         self.setCentralWidget(self.widget1)
-
-        self.setGeometry(150, 150, 700, 200)
-        self.setWindowTitle('Prubot')
+        # self.setWindowTitle('Prubot')
+        self.title_window()
+        self.setGeometry(100, 100, 700, 200)
         # prufrock 8.6, ping?
         self.show()
 
         # self.main_loop()
         # if checkbox clicked?
+
+    def title_window(self):
+
+        self.setWindowTitle('Prubot - ' +  player.Name)
+
 
 def main():
 
