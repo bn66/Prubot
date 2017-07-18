@@ -46,12 +46,12 @@ Network Trash Folder
 Temporary Items
 .apdisk
 
-# Mine
-*.pyc
-eab.ini
-kakuyoku.ini
-kakuyoku_exori_utito.ini
-nl.ini
-prufrock.ini
-prufrock_critical.ini
-sample_knight.ini
+# Ignore all
+/*
+
+# Except
+! ./cavebot/sample.txt
+! ./misc/*
+! ./profiles/sample_knight.ini
+! ./prubot.py
+! ./tibiaids.py
