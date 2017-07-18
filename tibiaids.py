@@ -16,7 +16,7 @@ loot_stack = {
     # 3029: 'small sapphire',
     # 3030: 'small ruby',
     # 3032: 'small emerald',
-    # 3033: 'small amethyst',
+    3033: 'small amethyst',
     3034: 'talon',
     9057: 'small topaz',
     10289: 'red lantern',
@@ -32,7 +32,7 @@ loot_stack = {
     # 10282: 'hydra head',
     10304: 'hellspawn tail',
     10313: 'winged tail',
-    # 10309: 'strand of medusa hair',
+    10309: 'strand of medusa hair',
     10310: 'shiny stone',
     10408: 'spiked iron ball',
     10409: 'corrupted flag',
@@ -112,8 +112,8 @@ loot_stack = {
     # 3731: 'fire mushroom',
     # 3732: 'green mushroom',
     7158: 'rainbow trout',
-    7159: 'green perch',
-    8014: 'cucumber'
+    7159: 'green perch'
+    # 8014: 'cucumber'
     }
 
 loot_commons = {
@@ -123,7 +123,7 @@ loot_commons = {
     3081: 'stone skin amulet',
 
     # 4831: 'old parchment'
-    # 2903: 'golden mug'
+    # 2903: 'golden mug',
     # 3407: 'charmer\'s tiara'
     7439: 'berserk potion',
     9056: 'black skull',
@@ -142,14 +142,14 @@ loot_commons = {
     11454: 'luminous orb',
     5668:'mysterious voodoo skull',
     2995: 'piggy bank',
-    3053: 'time ring',
+    # 3053: 'time ring',
     7290: 'shard',
     647: 'seeds'
     }
 
 loot_rares = {
     # Axes
-    7413: 'titan axe',
+    # 7413: 'titan axe',
     3342: 'war axe',
     7456: 'noble axe',
     10388: 'drakinata',
@@ -167,13 +167,13 @@ loot_rares = {
     3324: 'skull staff',
 
     # Swords
-    3280: 'fire sword',
+    # 3280: 'fire sword',
     3281: 'giant sword',
     7386: 'mercenary sword',
     7402: 'dragon slayer',
     10390: 'Zaoan sword',
     7382: 'demonrage sword',
-    3284: 'ice rapier',
+    # 3284: 'ice rapier',
     11657: 'twiceslicer',
     11693: 'blade of corruption',
     7404: 'assassin dagger',
@@ -191,7 +191,7 @@ loot_rares = {
     8084: 'springsprout rod',
 
     # Shields
-    3436: 'medusa shield',
+    # 3436: 'medusa shield',
     # 3428: 'tower shield',
     3414: 'mastermind shield',
     3420: 'demon shield',
@@ -222,11 +222,11 @@ loot_rares = {
 
     # Armors
     # 3370: 'knight armor',
-    3381: 'crown armor',
+    # 3381: 'crown armor',
     3386: 'dragon scale mail',
     8043: 'focus cape',
     8052: 'swamplair armor',
-    8894: 'rusty armor (common?)',
+    # 8894: 'rusty armor (common)',
     8895: 'rusty armor (semi-rare)',
     8896: 'rusty armor (rare)',
     8045: 'hibiscus dress',
@@ -360,8 +360,15 @@ for i in [skin_obsidian, skin_stake, skin_fish]:
     for key, value in i.iteritems():
         skin_list[key] = value
 
+"""Other Dictionaries
+"""
+empty_vials = {
+    283: 'empty potion flask',
+    284: 'empty potion flask',
+    285: 'empty potion flask'
+    }
 
-"""Various LIsts of things that are convenient
+"""Various Lists of things that are convenient
 """
 # Blood after something has died
 blood_list = {
@@ -936,9 +943,12 @@ creat_excl_list = {
     'Lavahole', 'Flamingo', 'Noxious Zombie', 'Watch Tower', 'Seagull',
     'Fire Guardian', 'Husky', 'Raised Corpse', 'Fire Elemental',
     'Noxious Ghoul', 'Magicthrower', 'Snake', 'Cobra', 'Spit Nettle',
-    'Silver Rabbit'
+    'Silver Rabbit', 'Skunk'
     }
 
+creat_noloot_list = {
+    'Water Elemental', 'Slime', 'Son of Verminor'
+    }
 
 # list of things to ignore in pathing
 # http://tibia.wikia.com/wiki/Category:Path-Blocking_Items
@@ -955,6 +965,11 @@ obstacle_list = {
     # 2125: 'fire field (small)',
     2126: 'energy field',
     2121: 'poision field',
+    2118: 'fire field (large, permanent)',
+    2119: 'fire field (med, permanent)',
+    # 2118: 'fire field (permanent)',
+    # 2118: 'fire field (permanent)',
+    1999: 'campfire',
     # box, crates
     2469: 'box',
     2471: 'crate',

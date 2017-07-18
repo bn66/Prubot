@@ -1,6 +1,5 @@
 """Prubot
 
-
 """
 import pythoncom
 pythoncom.CoInitialize() # To import CLR with PyQt4 without OLE Error
@@ -25,15 +24,25 @@ import tibiaids as tid
 
 """Initializations
 """
-# variables needed for all functions
+def injection():
+    """
+    """
+    global client
+    global inven
 
-# Get Client
-# client = Tibia.Objects.Client.GetClients()[1]
-client = Tibia.Util.ClientChooser.ShowBox()
-print client
-inven = client.Inventory
+    # Get Client
+    # client = Tibia.Objects.Client.GetClients()[1]
+    client = Tibia.Util.ClientChooser.ShowBox()
+    print client
+    inven = client.Inventory
 
-# player = client.GetPlayer()
+    # Remove path blocking objects
+    for i in tid.obstacle_list:
+        item = Tibia.Objects.Item(client, System.UInt32(i))
+        item.SetFlag(Tibia.Addresses.DatItem.Flag.BlocksPath, False)
+
+injection()
+
 def bot_init():
     """Function refreshes objects that might get outdated after logging in/out
     """
@@ -42,13 +51,6 @@ def bot_init():
     player = client.GetPlayer()
 
 bot_init()
-
-# Remove path blocking objects
-for i in tid.obstacle_list:
-    item = Tibia.Objects.Item(client, System.UInt32(i))
-    item.SetFlag(Tibia.Addresses.DatItem.Flag.BlocksPath, False)
-
-
 
 """General useful functions for working with TibiaAPI
 """
@@ -75,18 +77,6 @@ def find_player_tile():
 
     print 'Player tile not found'
     return None
-
-# def get_floor_tiles():
-#     # floor_tiles = list(client.Map.GetTilesOnSameFloor()) # Bugged out often
-#     tiles = list(client.Map.GetTiles())
-#
-#     # Calculate Memory Location
-#     if player.Z >= 8: # Below Ground
-#         mfloor = 2
-#     else:
-#         mfloor = abs(player.Z - 7)
-#
-#     return tiles[(mfloor*252):((mfloor+1)*252)]
 
 def tile_to_rel_loc(tile, player_tile):
     """Calculates relative position of two tile objects: 'tile' to 'player_tile'
@@ -118,6 +108,63 @@ def tile_to_rel_loc(tile, player_tile):
     zloc = zmdiff
 
     return (xloc, yloc, zloc)
+
+def rel_to_tile(relx, rely, relz = 0):
+    """Takes positions relative to player and returns the corresponding tile.
+    relz not implemented.
+    """
+    xbound = (-8, 9)
+    ybound = (-6, 7)
+    # zbound = ()
+
+    # Out of bounds check
+    if (relx < xbound[0]) or (relx > xbound[1]):
+        print 'relx out of bounds'
+        return
+    if (rely < ybound[0]) or (rely > ybound[1]):
+        print 'rely out of bounds'
+        return
+    # if (relx < xbound[0]) or (relx > xbound[1]):
+        # print 'relx out of bounds'
+        # return
+
+    pt = find_player_tile()
+    floor_tiles = [i for i in client.Map.GetTilesOnSameFloor()] # 2D
+    pt_no = pt.TileNumber
+
+
+    # Find relative location of tile_no in memory
+    dx = pt.MemoryLocation.X + relx
+    dy = pt.MemoryLocation.Y + rely
+
+    # Adjust memory locations
+    adjx = dx
+    adjy = dy
+    if (dx < 0):
+        adjx = dx + 18
+    elif (dx > 17): # out of bounds, flip
+        adjx = dx - 18
+    if (dy < 0):
+        adjy = dy + 14
+    elif (dy > 13): # out of bounds, flip
+        adjy = dy - 14
+
+    # correct tile
+    corr_tile = 1*adjx + 18*adjy
+
+    return floor_tiles[corr_tile]
+
+def get_adj_tiles():
+    adj_tiles = []
+    adj_coord = [(-1, -1), (0, -1), (+1, -1),
+                 (-1, +0), (0, +0), (+1, +0),
+                 (-1, +1), (0, +1), (+1, +1)]
+    adj_coord.remove((0, +0)) # Can comment out later or add functionality
+
+    for relxy in adj_coord:
+        adj_tiles.append(rel_to_tile(*relxy))
+
+    return adj_tiles
 
 def tile_to_world_loc(tile, player_tile):
     """Calculates the global position of 'tile', using relative position to
@@ -177,6 +224,37 @@ def find_corpse_cont():
 
     # print 'corpse_cont not found'
     return None
+
+def find_target():
+
+    for i in get_bl_creats():
+        if i.Id == player.TargetId:
+            return i
+
+    return None
+
+def get_statuses(num):
+    ps = []
+
+    total = 16
+    enums = [2**i for i in range(total)]
+    flags = ['None', 'Poisoned', 'Burning', 'Electrified', 'Drunk',
+            'ProtectedByManaShield', 'Paralysed', 'Hasted', 'InBattle',
+            'Drowning', 'Freezing', 'Dazzled', 'Cursed', 'Buffed',
+            'CannotLogoutOrEnterProtectionZone', 'WithinProtectionZone',
+            'Bleeding']
+    enums.reverse()
+    flags.reverse()
+
+    if num == 0:
+        return ps
+
+    for i in range(total):
+        if num >= enums[i]:
+            num -= enums[i]
+            ps.append(flags[i])
+
+    return ps
 
 """Functions to make various packets
 """
@@ -307,16 +385,17 @@ class PQueue(object):
 
 class PQItem(PQueue):
     """ItemUseOn, ItemUseBattleList, ItemUse, ItemMove
-    0: Life: MP/HP/E-Ring (Emergency?) Attacking runes
-    1: Looter: Looting (Move Item, use item)
-    2: Looter: Walk to corpse, use corpse.
-    3: Cavebot waypoints: (Use, say?, Goto.)
+    0: Life: HP/E-Ring (Emergency?)
+    1: Life: MP, Attacking runes
+    2: Looter: Looting (Move Item, use item); Support: empty vials
+    3: Looter: Walk to corpse, use corpse.
+    4: Cavebot waypoints: (Use, say?, Goto.) # Currently unused
 
     Will be a queue of lists in the format ['packettype', [args]]
     """
 
     def __init__(self):
-        levels = 4
+        levels = 5
         super(PQItem, self).__init__(levels)
         self.tryct = [0]*levels
         self.maxct = [None, None, 20, 20]
@@ -358,13 +437,16 @@ class PQItem(PQueue):
             pkt = fxn(*args)
 
             # Test pkt.Send() for completion.
-            if flvl == 0: # 0: Life: MP/HP/E-Ring, atk runes
+            if flvl == 0: # 0: Life: HP/E-Ring (Emergency?)
                 # Spam them? Send packets twice?
                 pkt.Send()
-            elif flvl == 1: # 1: Looter: Looting (Move Item, use item)
+            elif flvl == 1: # 1: Life: MP, Attacking runes
                 # Should run until completion.
                 pkt.Send()
-            elif flvl == 2: # 2: Looter: Walk to corpse, use corpse.
+            elif flvl == 2: # 2: Looter: (Move Item, use item); Support: EV
+                # Should run until completion.
+                pkt.Send()
+            elif flvl == 3: # 3: Looter: Walk to corpse, use corpse.
                 # count containers and check that it has changed
                 toloc = Tibia.Objects.Location(*args[0])
                 # if (not player.IsWalking) & (not player.TargetId): # and (not player.TargetId)
@@ -373,7 +455,8 @@ class PQItem(PQueue):
                 # else: # Waiting
                     # self.items[flvl].append(nxt)
 
-                if player.DistanceTo(toloc) < 2: # In position: adj or on top
+                # In position: adj or on top
+                if (player.DistanceTo(toloc) < 2) and (find_corpse_cont):
                     cn0 = len(list(inven.GetContainers()))
                     pkt.Send() # Should be sent when in position.
                     self.tryct[flvl] += 1
@@ -416,22 +499,22 @@ class PQItem(PQueue):
                 # 82 73 7D B0 79 00 00 00 01 00
                 # 82 73 7D B0 79 00 74 1C 01 03
 
-            elif flvl == 3: # 3: Cavebot waypoints: (Use, say?, Goto.)
+            elif flvl == 4: # 4: Cavebot waypoints: (Use, say?, Goto.)
                 # Implemented instead in cavebot walker
                 pass
 
-
 class PQSay(PQueue):
     """client.Console.Say
-    0: Life: Heal spells/attack spells
-    1: Utility, spells?
+    0: Life: Heal spells
+    1: Attack spells
+    2: Utility, spells
 
     Is a queue full of strings.
     """
 
 
     def __init__(self):
-        levels = 2
+        levels = 3
         super(PQSay, self).__init__(levels)
 
     # def enq(self, obj, lvl):
@@ -991,6 +1074,8 @@ class PrubotWidget(QtGui.QWidget):
         self.cb_main.stateChanged.connect(self.maincb_changed)
         self.connect(self.mlt, QtCore.SIGNAL('update()'), self.main_loop)
 
+        # self.bot_status = None
+
         # All section labels
         secfont = QtGui.QFont() # Section font
         secfont.setBold(True)
@@ -1152,7 +1237,9 @@ class PrubotWidget(QtGui.QWidget):
 
         # Support Section
         # supp_pots = QtGui.QPushButton('Pots')
-        supp_mi = QtGui.QPushButton('Move Item')
+        # supp_mi = QtGui.QPushButton('Move Item')
+        self.supp_ev = QtGui.QCheckBox('Empty Vials')
+        self.supp_gold = QtGui.QCheckBox('Change Gold')
 
         # Looter Section
         self.loot_findcb = QtGui.QCheckBox('Find Corpse On')
@@ -1164,8 +1251,14 @@ class PrubotWidget(QtGui.QWidget):
         self.loot_creats = []
         self.loot_corpse_q = []
 
-        tools_floorspy = QtGui.QPushButton('Floorspy')
-        tools_namespy = QtGui.QPushButton('Namespy')
+        self.tools_ls_cb = QtGui.QCheckBox('Level Spy')
+        self.tools_ls_cb.stateChanged.connect(self.tools_ls_fxn)
+        self.tools_ls_sb = QtGui.QSpinBox(self)
+        self.tools_ls_sb.setMaximum(8)
+        self.tools_ls_sb.setMinimum(-3)
+        self.tools_ls_sb.valueChanged.connect(self.tools_ls_fxn)
+        self.tools_namespy = QtGui.QCheckBox('Namespy')
+        self.tools_namespy.stateChanged.connect(self.tools_ns_sc)
         tools_mwtimer = QtGui.QPushButton('Magic Wall Timer')
         tools_wgtimer = QtGui.QPushButton('Wild Growth Timer')
         script_test = QtGui.QPushButton('Script Test')
@@ -1214,7 +1307,8 @@ class PrubotWidget(QtGui.QWidget):
 
         # Support
         vbox_supp = QtGui.QVBoxLayout()
-        vbox_supp.addWidget(supp_mi)
+        vbox_supp.addWidget(self.supp_ev)
+        vbox_supp.addWidget(self.supp_gold)
         # vbox_supp.addWidget(supp_invis)
         vbox_supp.addStretch(1)
 
@@ -1252,8 +1346,12 @@ class PrubotWidget(QtGui.QWidget):
 
         # Tools
         vbox_tools = QtGui.QVBoxLayout()
-        vbox_tools.addWidget(tools_floorspy)
-        vbox_tools.addWidget(tools_namespy)
+        hbox_tools_ls = QtGui.QHBoxLayout()
+        hbox_tools_ls.addWidget(self.tools_ls_cb)
+        hbox_tools_ls.addWidget(self.tools_ls_sb)
+        vbox_tools.addLayout(hbox_tools_ls)
+        vbox_tools.addWidget(self.tools_namespy)
+        vbox_tools.addWidget(self.tools_namespy)
         vbox_tools.addWidget(tools_mwtimer)
         vbox_tools.addWidget(tools_wgtimer)
         vbox_tools.addStretch(1)
@@ -1331,15 +1429,13 @@ class PrubotWidget(QtGui.QWidget):
         if self.cb_main.isChecked() == True:
             # print 'main_loop checked is true, mlt start'
             bot_init()
+            # self.setWindowTitle('Prubot' + player.Name)
             self.mlt._runflag_ = True
             self.mlt.start()
         elif self.cb_main.isChecked() == False:
             # print 'main_loop checked is false, mlt quit'
             self.mlt._runflag_ = False
             # self.mlt.quit()
-
-    def atkcb_changed(self):
-        pass
 
     def sel_type(self, loc):
         # 'type' combox activated, select type
@@ -1461,48 +1557,49 @@ class PrubotWidget(QtGui.QWidget):
             pass
         elif id_txt == 'Select...':
             pass
-        elif (type_txt == 'Spell') & (loc <= 1):
+        elif (type_txt == 'Spell'):
             if id_txt == 'Other...':
                 arg = id_le_txt
             else:
                 arg = id_txt
+            if loc <= 1: # From Attack
+                self.pqs.enq(1, arg)
+            elif loc <= 3: # From Defense, HP
                 self.pqs.enq(0, arg)
-        elif (type_txt == 'Spell') & (loc > 1):
-            if id_txt == 'Other...':
-                arg = id_le_txt
-            else:
-                arg = id_txt
-                self.pqs.enq(0, arg)
-        elif (type_txt == 'Rune') & (loc <= 1):
+            elif loc <= 4: # From Defense, MP
+                self.pqs.enq(1, arg)
+        elif (type_txt == 'Rune'):
             if id_txt == 'Other...':
                 runeid = id_le_txt
             else:
-                runeid = tid.atk_runes[id_txt]
-                obj = ['hotkey', [runeid, 'target']]
+                if loc <= 1 : # Attack Runes
+                    runeid = tid.atk_runes[id_txt]
+                    obj = ['hotkey', [runeid, 'target']]
+                elif loc <= 4:
+                    runeid = tid.def_runes[id_txt]
+                    obj = ['hotkey', [runeid, 'yourself']]
+            if loc <= 1: # From Attack
+                self.pqi.enq(1, obj)
+            elif loc <= 3: # From Defense, HP
                 self.pqi.enq(0, obj)
-        elif (type_txt == 'Rune') & (loc > 1):
-            if id_txt == 'Other...':
-                runeid = id_le_txt
-            else:
-                runeid = tid.def_runes[id_txt]
-                obj = ['hotkey', [runeid, 'yourself']]
-                self.pqi.enq(0, obj)
-        # elif (type_txt == 'Pot') & (loc <= 1): # No attack pots
-            # print 'pqi eqn arg'
-            # if id_txt == 'Other...':
-            #     potid = id_le_txt
-            # else:
-            #     potid = tid.def_pots[id_txt]
-            #     obj = ['hotkey', [potid, 'target']]
-            #     print obj
-            #     self.pqi.enq(0, obj)
+            elif loc <= 4: # From Defense, MP
+                self.pqi.enq(1, obj)
         elif (type_txt == 'Pot') & (loc > 1):
             if id_txt == 'Other...':
                 potid = id_le_txt
             else:
-                potid = tid.def_pots[id_txt]
-                obj = ['hotkey', [potid, 'yourself']]
+                if loc <= 1 : # Attack Runes
+                    # obj = ['hotkey', [potid, 'target']]
+                    pass # No attack pots
+                elif loc <= 4:
+                    potid = tid.def_pots[id_txt]
+                    obj = ['hotkey', [potid, 'yourself']]
+            if loc <= 1: # From Attack
+                self.pqi.enq(1, obj)
+            elif loc <= 3: # From Defense, HP
                 self.pqi.enq(0, obj)
+            elif loc <= 4: # From Defense, MP
+                self.pqi.enq(1, obj)
 
     def aoe_logic(self):
         xy_max = self.atk_aoesb2.value()
@@ -1553,12 +1650,34 @@ class PrubotWidget(QtGui.QWidget):
 
         print 'self.target_priority: ', self.target_priority
 
+    def atk_chase_logic(self, chase):
+
+        if self.atk_chasecb.isChecked():
+            if chase == 0:
+                targ = find_target()
+                # targ.Approach()
+                if player.DistanceTo(targ.Location) > 2:
+                    targ.Approach()
+
+            elif chase == 1:
+                client.FollowMode = 1
+            elif chase == 2: # Use tile where the creature is?
+                #
+                pass
+
     def auto_target_logic(self):
         # True/False Conditions, then sorting conditions
+
+        if 'WithinProtectionZone' in get_statuses(player.Flags):
+            return
+        if player.TargetId:
+            return
+
         creat_list = get_bl_creats()
 
         conditions = [Tibia.Objects.Creature.IsReachable
             # Tibia.Objects.Creature.IsAttacking
+            # Tibia.Objects.Creature.IsBlocking
             ]
 
         # Make the list of attackable creatures
@@ -1585,7 +1704,13 @@ class PrubotWidget(QtGui.QWidget):
                 atk_list.sort(key=lambda x: [x[1], x[2]])
             elif self.target_priority == ['hp', 'dist']:
                 atk_list.sort(key=lambda x: [x[2], x[1]])
+            # player.Stop() # see how this turns out
             atk_list[0][0].Attack()
+
+            player.GoToX = 0 # Should be enough
+            # pkt = Tibia.Packets.Outgoing.AutoWalkCancelPacket(client)
+            # pkt.Send()
+
         else:
             pass
 
@@ -1598,7 +1723,8 @@ class PrubotWidget(QtGui.QWidget):
             add_conds = [c.Id not in creat_ids,
                         test_pnc(c.Id) == 'creature',
                         c.Name not in tid.creat_excl_list,
-                        c.Z == player.Z
+                        c.Z == player.Z,
+                        c.Name not in tid.creat_noloot_list
                         ]
             if all(add_conds):
                 self.loot_creats.append(c)
@@ -1637,13 +1763,9 @@ class PrubotWidget(QtGui.QWidget):
 
         # FIFO, list should be empty after this loop
         for i in range(0, len(self.loot_corpse_q)):
-            # 1 and 2 should work as args, but better implementation possible
-
+            # Opens on container 5, hopefully it's enough.
             c = self.loot_corpse_q.pop()
-            # self.pqi.enq(2, ['use', [[c.X, c.Y, c.Z], 1000, 2, 0]])
-            self.pqi.enq(2, ['use', [[c.X, c.Y, c.Z], 1000, 3, 0]])
-            # Greater Wyrm?
-            # self.pqi.enq(2, ['use', [[c.X, c.Y, c.Z], 8113, 2, 0]])
+            self.pqi.enq(3, ['use', [[c.X, c.Y, c.Z], 1000, 3, 5]])
 
     def reset_loot_logic1(self):
         self.idx_rare = 0
@@ -1712,7 +1834,7 @@ class PrubotWidget(QtGui.QWidget):
         toloc = Location object to move item.
         """
         itemloc = item.Location.ToLocation()
-        self.pqi.enq(1, ['move', [[itemloc.X, itemloc.Y, itemloc.Z],
+        self.pqi.enq(2, ['move', [[itemloc.X, itemloc.Y, itemloc.Z],
                                 item.Id, itemloc.Z,
                                 [toloc.X, toloc.Y, toloc.Z],
                                 item.Count
@@ -1728,6 +1850,7 @@ class PrubotWidget(QtGui.QWidget):
         Needs: self.corpse_cont, self.loot_cont, self.loot_bps
         """
 
+        # self.statusflag = 'looting'
         corpse_items = list(self.corpse_cont.GetItems())
         precount = len(corpse_items)
 
@@ -1805,7 +1928,7 @@ class PrubotWidget(QtGui.QWidget):
     def cavebot_logic(self):
 
         cb_conds = [self.pqi.isempty(), not player.IsWalking,
-                    not player.TargetId
+                    not player.TargetId, not find_corpse_cont()
                     ]
 
         # walk(self, xyz, direction), autowalk(),
@@ -1822,21 +1945,66 @@ class PrubotWidget(QtGui.QWidget):
             self.wlkr.go()
 
             # Only tests the "Go"
+            # No failsafe built in.
             if player.DistanceTo(toloc) == 0:
                 print 'ONTOP OF TILE'
+            elif player.Z != toloc.Z:
+                print 'CHANGED FLOORS'
             elif player.DistanceTo(toloc) < 2:
                 print 'ADJACENT TO TILE'
             else:
                 # Try Again
                 self.wlkr.moveto_waypt(cidx)
 
+    def supp_empty_vials(self):
+        pbp_items = list(find_player_bp().GetItems())
+
+        for i in pbp_items:
+            if i.Id in tid.empty_vials:
+                if i.Count == 100:
+                    iloc = i.Location.ToLocation()
+                    toloc = player.Location
+                    self.pqi.enq(2, ['move', [[iloc.X, iloc.Y, iloc.Z],
+                                            i.Id, iloc.Z,
+                                            [toloc.X, toloc.Y, toloc.Z],
+                                            i.Count
+                                            ]])
+
+    def supp_gold_changer(self):
+        pbp_items = list(find_player_bp().GetItems())
+
+        for i in pbp_items:
+            if i.Id in [3031, 3035, 3043]:
+                if i.Count == 100:
+                    # print 'exchanging gold'
+                    # Shouldn't need to enq it
+                    i.Use()
+
+    def tools_ls_fxn(self):
+        if self.tools_ls_cb.isChecked() == True:
+            # floor = int(self.tools_fs_sb.value())
+            floor = self.tools_ls_sb.value()
+            client.Map.LevelSpyOn(floor)
+        elif self.tools_ls_cb.isChecked() == False:
+            client.Map.LevelSpyOff()
+
+    def tools_ns_sc(self):
+        """NameSpy StateChanged
+        """
+        if self.tools_namespy.isChecked() == True:
+            client.Map.NameSpyOn()
+        elif self.tools_namespy.isChecked() == False:
+            client.Map.NameSpyOff()
+
     def attack(self):
         if self.atk_cb.isChecked() == True:
-            if player.TargetId != 0:
+            if player.TargetId:
                 self.atk_logic()
-            elif self.atk_atcb0.isChecked() == True: # Auto target
+                self.atk_chase_logic(0)
+            elif self.atk_atcb0.isChecked():
+                # Auto target
                 self.auto_target_logic()
-            elif self.atk_atcb0.isChecked() == False: # No target, no auto targ
+            elif not self.atk_atcb0.isChecked(): # No target, no auto targ
                 pass
         elif self.atk_cb.isChecked() == False:
             # print 'atk_cb is checked false'
@@ -1860,7 +2028,8 @@ class PrubotWidget(QtGui.QWidget):
         # Utility
         currtime = time()
         # Haste
-        if self.def_ut_hastecb.isChecked():
+        if self.def_ut_hastecb.isChecked() and \
+                (not 'WithinProtectionZone' in get_statuses(player.Flags)):
             hastetxt = str(self.def_ut_haste.currentText())
             if hastetxt != 'Haste...':
                 if hastetxt == 'utani hur':
@@ -1873,7 +2042,7 @@ class PrubotWidget(QtGui.QWidget):
                     hastecd = 10
 
                 if currtime - self.hastetime > hastecd - 1.5:
-                    self.pqs.enq(1, hastetxt)
+                    self.pqs.enq(2, hastetxt)
                     self.hastetime = time()
             else:
                 pass
@@ -1884,7 +2053,7 @@ class PrubotWidget(QtGui.QWidget):
             inviscd = 200
 
             if currtime - self.invistime > inviscd - 10:
-                self.pqs.enq(1, invistxt)
+                self.pqs.enq(2, invistxt)
                 self.invistime = time()
 
         # Custom
@@ -1893,7 +2062,7 @@ class PrubotWidget(QtGui.QWidget):
             custcd = self.def_ut_custsb.value()
 
             if currtime - self.custtime > custcd - 0:
-                self.pqs.enq(1, custtxt)
+                self.pqs.enq(2, custtxt)
                 self.custtime = time()
 
     def looter(self):
@@ -1914,6 +2083,14 @@ class PrubotWidget(QtGui.QWidget):
                     self.loot_logic1()
             else: # No Corpse Open
                 pass
+
+    def support(self):
+
+        if self.supp_ev.isChecked() == True:
+            self.supp_empty_vials()
+
+        if self.supp_gold.isChecked() == True:
+            self.supp_gold_changer()
 
     def cavebot_load(self):
         fname = QtGui.QFileDialog.getOpenFileName(
@@ -1964,12 +2141,26 @@ class PrubotWidget(QtGui.QWidget):
 
         self.update_plyrinfo()
 
+        # self.bot_status = 'atk'
         self.attack()
+
+        # self.bot_status = 'def'
         self.defense()
-        # self.support
+        self.pqi.deq() # Extra
+        self.pqs.deq() # Extra
+        # self.defense()
+
+        # self.bot_status = 'loot'
         self.looter()
 
+        # self.bot_status = 'supp'
+        self.support()
+
+        # self.bot_status = 'wlkr'
         self.cavebot_walker()
+
+        # self.bot_status = 'tool'
+        # self.tools()
 
         # self.scripts
 
@@ -1993,7 +2184,7 @@ class PrubotWidget(QtGui.QWidget):
         settings.setValue('atk_type', self.atk_type.currentIndex())
         settings.setValue('atk_id', self.atk_id.currentIndex())
         settings.setValue('atk_id_le', self.atk_id_le.text())
-        settings.setValue('atk_atcb0', self.atk_atcb0.checkState())
+        # settings.setValue('atk_atcb0', self.atk_atcb0.checkState())
         settings.setValue('atk_atcb1', self.atk_cb.checkState())
         settings.setValue('atk_atcb2', self.atk_cb.checkState())
         settings.setValue('target_priority', str(self.target_priority)) # care
@@ -2023,6 +2214,13 @@ class PrubotWidget(QtGui.QWidget):
         settings.setValue('def_ut_custcb', self.def_ut_custcb.checkState())
         settings.setValue('def_ut_custsb', self.def_ut_custsb.value())
         settings.setValue('def_ut_custle', self.def_ut_custle.text())
+
+        # Support
+        settings.setValue('supp_ev', self.supp_ev.checkState())
+        settings.setValue('supp_gold', self.supp_gold.checkState())
+
+        # Tools
+        settings.setValue('tools_namespy', self.tools_namespy.checkState())
 
         # Spaceholder for next section
 
@@ -2103,14 +2301,19 @@ class PrubotWindow(QtGui.QMainWindow):
 
         self.widget1 = PrubotWidget()
         self.setCentralWidget(self.widget1)
-
-        self.setGeometry(150, 150, 700, 200)
-        self.setWindowTitle('Prubot')
+        # self.setWindowTitle('Prubot')
+        self.title_window()
+        self.setGeometry(100, 100, 700, 200)
         # prufrock 8.6, ping?
         self.show()
 
         # self.main_loop()
         # if checkbox clicked?
+
+    def title_window(self):
+
+        self.setWindowTitle('Prubot - ' +  player.Name)
+
 
 def main():
 
