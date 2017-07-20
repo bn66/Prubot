@@ -28,10 +28,10 @@ loot_stack = {
     5944: 'soul orb',
     9636: 'fiery heart',
     9665: 'wyrm scale',
-    9694: 'snake skin',
+    # 9694: 'snake skin',
     # 10282: 'hydra head',
     10304: 'hellspawn tail',
-    10313: 'winged tail',
+    # 10313: 'winged tail',
     10309: 'strand of medusa hair',
     10310: 'shiny stone',
     10408: 'spiked iron ball',
@@ -212,7 +212,7 @@ loot_rares = {
     5741: 'skull helmet',
 
     # Necklaces:
-    # 3055: 'platinum amulet',
+    # 3055: 'f amulet',
     3016: 'ruby necklace',
 
     # Rings
@@ -991,6 +991,16 @@ tool_list = {
     'sneaky stabber of eliteness': 9594,
     'squeezing gear of girlpower': 9596,
     'whacking driller of fate': 9598
+    }
+
+# Food list to use for the eater
+food_list = {
+    'fire mushroom': 3731,
+    'meat': 3577,
+    'fish': 3578,
+    'ham': 3582,
+    'dragon ham': 3583,
+    'brown mushroom': 3725
     }
 
 # Chose List over dictionary because it was easier to pick by spell name

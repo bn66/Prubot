@@ -302,7 +302,7 @@ def mk_itemmove(flxyz, sid, fsp, tlxyz, count):
     return pkt
 
 def mk_hotkey_pkt(item_id, targ, toloc = None, tosid = 0, tosp = None):
-    # targ = 'yourself' 'target' 'crosshairs'
+    # targ = 'yourself' 'target' 'crosshairs', 'none'
     args = []
     # Tibia.Objects.ItemLocation.FromHotkey().ToLocation()
     args.append((65535, 0, 0)) # FromLoc
@@ -320,7 +320,9 @@ def mk_hotkey_pkt(item_id, targ, toloc = None, tosid = 0, tosp = None):
         args.append(tosid) # ToSpriteId
         args.append(tosp) # ToStackPosition
         pkt = mk_itemuseon(*args)
-
+    elif targ == 'none':
+        args.append(0) # Index
+        pkt = mk_itemuse(*args)
     # print args
     return pkt
 
@@ -1236,10 +1238,25 @@ class PrubotWidget(QtGui.QWidget):
         grid_def.setColumnStretch(6, 1)
 
         # Support Section
-        # supp_pots = QtGui.QPushButton('Pots')
-        # supp_mi = QtGui.QPushButton('Move Item')
         self.supp_ev = QtGui.QCheckBox('Empty Vials')
         self.supp_gold = QtGui.QCheckBox('Change Gold')
+        supp_eatgb = QtGui.QGroupBox('Eater', self)
+        supp_eatgb.setStyleSheet('QGroupBox {border:1px solid}')
+        supp_eatgb.setStyleSheet('QGroupBox::title {top: -2px;}')
+        self.supp_eatcb = QtGui.QCheckBox('Eater', self)
+        self.supp_eatcbx = QtGui.QComboBox(self)
+        self.foodtime = 0
+
+        self.supp_eatcbx.addItem('Select food...')
+        foodlist = tid.food_list.keys()
+        foodlist.sort()
+        for f in foodlist:
+            self.supp_eatcbx.addItem(f)
+
+        vbox_eat = QtGui.QVBoxLayout()
+        vbox_eat.addWidget(self.supp_eatcb)
+        vbox_eat.addWidget(self.supp_eatcbx)
+        supp_eatgb.setLayout(vbox_eat)
 
         # Looter Section
         self.loot_findcb = QtGui.QCheckBox('Find Corpse On')
@@ -1310,6 +1327,7 @@ class PrubotWidget(QtGui.QWidget):
         vbox_supp.addWidget(self.supp_ev)
         vbox_supp.addWidget(self.supp_gold)
         # vbox_supp.addWidget(supp_invis)
+        vbox_supp.addWidget(supp_eatgb)
         vbox_supp.addStretch(1)
 
         # Cavebot: Walker/Writer
@@ -1980,6 +1998,22 @@ class PrubotWidget(QtGui.QWidget):
                     # Shouldn't need to enq it
                     i.Use()
 
+    def supp_eater(self):
+        # 82 FF FF 00 00 00 8D 0E 00 00
+        # 82 00 00 00 00 00 8D 0E 00 00
+        currtime = time()
+        food = str(self.supp_eatcbx.currentText())
+        conds = [not 'WithinProtectionZone' in get_statuses(player.Flags),
+            currtime - self.foodtime > 120, # Eat every two minutes
+            food in tid.food_list
+            ]
+        if all(conds):
+            food_id = tid.food_list[food]
+            pkt = mk_hotkey_pkt(food_id, 'none')
+            pkt.Send()
+        else:
+            pass
+
     def tools_ls_fxn(self):
         if self.tools_ls_cb.isChecked() == True:
             # floor = int(self.tools_fs_sb.value())
@@ -2091,6 +2125,9 @@ class PrubotWidget(QtGui.QWidget):
 
         if self.supp_gold.isChecked() == True:
             self.supp_gold_changer()
+
+        if self.supp_eatcb.isChecked():
+            self.supp_eater()
 
     def cavebot_load(self):
         fname = QtGui.QFileDialog.getOpenFileName(
