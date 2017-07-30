@@ -65,7 +65,8 @@ def find_player_tile():
             if client.Map.GetTileWithPlayer(): #
                 floor_tiles = list(client.Map.GetTilesOnSameFloor())
                 # floor_tiles = get_floor_tiles()
-                floor_obj_data = [[i.Data for i in list(j.Objects)] for j in floor_tiles]
+                floor_obj_data = [[
+                    i.Data for i in list(j.Objects)] for j in floor_tiles]
                 # floor_objs = [list(j.Objects) for j in floor_tiles]
                 # floor_obj_ids = [[i.Data for i in j] for j in floor_objs]
 
@@ -76,6 +77,21 @@ def find_player_tile():
             pass
 
     print 'Player tile not found'
+    return None
+
+def get_floor_tiles():
+    """Wrapper for GetTilesOnSameFloor that will catch
+    System.NUllReferenceException
+    """
+    if client.LoggedIn:
+        try:
+            # Try to catch System.NUllReferenceException race condition
+            if client.Map.GetTileWithPlayer(): #
+                floor_tiles = list(client.Map.GetTilesOnSameFloor())
+                return floor_tiles
+        except:
+            pass
+
     return None
 
 def tile_to_rel_loc(tile, player_tile):
@@ -389,18 +405,19 @@ class PQItem(PQueue):
     """ItemUseOn, ItemUseBattleList, ItemUse, ItemMove
     0: Life: HP/E-Ring (Emergency?)
     1: Life: MP, Attacking runes
-    2: Looter: Looting (Move Item, use item); Support: empty vials
-    3: Looter: Walk to corpse, use corpse.
-    4: Cavebot waypoints: (Use, say?, Goto.) # Currently unused
+    2: Looter: Looting (Move Item, use item); Support: empty vials, eater
+    3: Skinner
+    4: Looter: Walk to corpse, use corpse.
+    5: Cavebot waypoints: (Use, say?, Goto.) # Currently unused
 
     Will be a queue of lists in the format ['packettype', [args]]
     """
 
     def __init__(self):
-        levels = 5
+        levels = 6
         super(PQItem, self).__init__(levels)
         self.tryct = [0]*levels
-        self.maxct = [None, None, 20, 20]
+        self.maxct = [None, None, None, 20, 20]
 
         # self.tryct1 = [0]*levels # Packet Send Try Count
 
@@ -448,7 +465,23 @@ class PQItem(PQueue):
             elif flvl == 2: # 2: Looter: (Move Item, use item); Support: EV
                 # Should run until completion.
                 pkt.Send()
-            elif flvl == 3: # 3: Looter: Walk to corpse, use corpse.
+            elif flvl == 3: # 3: Skinner
+
+                conds = [not find_corpse_cont()
+                   ]
+
+                if all(conds):
+                    toloc = Tibia.Objects.Location(*args[2])
+                    if player.DistanceTo(toloc) < 2:
+                        pkt.Send() # Should be sent when in position.
+                    elif player.DistanceTo(toloc) < 10: #
+                        player.GoTo = toloc
+                        self.items[flvl].append(nxt)
+                    else:
+                        # Packet deqs, without sending
+                        pass
+
+            elif flvl == 4: # 4: Looter: Walk to corpse, use corpse.
                 # count containers and check that it has changed
                 toloc = Tibia.Objects.Location(*args[0])
                 # if (not player.IsWalking) & (not player.TargetId): # and (not player.TargetId)
@@ -498,8 +531,6 @@ class PQItem(PQueue):
                         print 'OUTSIDE Failure ON TRY #', self.tryct[flvl]
                         # Represents a failure for packet?
 
-                # 82 73 7D B0 79 00 00 00 01 00
-                # 82 73 7D B0 79 00 74 1C 01 03
 
             elif flvl == 4: # 4: Cavebot waypoints: (Use, say?, Goto.)
                 # Implemented instead in cavebot walker
@@ -590,8 +621,7 @@ class Cavebot(object):
         player.GoTo = loc
 
     def usetile(self, xyz, groundid, stackpos):
-        """
-        Considering using tiles as close as possible in order to path find
+        """Considering using tiles as close as possible in order to path find
         """
         pkt = Tibia.Packets.Outgoing.ItemUsePacket(client)
 
@@ -1075,6 +1105,9 @@ class PrubotWidget(QtGui.QWidget):
         self.cb_main = QtGui.QCheckBox('Main Loop', self)
         self.cb_main.stateChanged.connect(self.maincb_changed)
         self.connect(self.mlt, QtCore.SIGNAL('update()'), self.main_loop)
+        self.cb_hunt_ks = QtGui.QCheckBox('Hunt Kill Switch', self)
+        self.cb_hunt_ks.setCheckState = True
+        self.cb_hunt_ks.stateChanged.connect(self.hunt_kill_switch)
 
         # self.bot_status = None
 
@@ -1240,7 +1273,7 @@ class PrubotWidget(QtGui.QWidget):
         # Support Section
         self.supp_ev = QtGui.QCheckBox('Empty Vials')
         self.supp_gold = QtGui.QCheckBox('Change Gold')
-        supp_eatgb = QtGui.QGroupBox('Eater', self)
+        supp_eatgb = QtGui.QGroupBox('Eater On', self)
         supp_eatgb.setStyleSheet('QGroupBox {border:1px solid}')
         supp_eatgb.setStyleSheet('QGroupBox::title {top: -2px;}')
         self.supp_eatcb = QtGui.QCheckBox('Eater', self)
@@ -1267,6 +1300,7 @@ class PrubotWidget(QtGui.QWidget):
         self.loot_cont = None
         self.loot_creats = []
         self.loot_corpse_q = []
+        self.loot_skincb = QtGui.QCheckBox('Skinner On')
 
         self.tools_ls_cb = QtGui.QCheckBox('Level Spy')
         self.tools_ls_cb.stateChanged.connect(self.tools_ls_fxn)
@@ -1280,6 +1314,10 @@ class PrubotWidget(QtGui.QWidget):
         tools_wgtimer = QtGui.QPushButton('Wild Growth Timer')
         script_test = QtGui.QPushButton('Script Test')
         #client.map; level spy, light spy, replace trees
+
+        # Misc section
+        self.as_loc_old = None # Anti Stuck Location old
+        self.as_time = 0
 
         # All sections being created...
         # Info
@@ -1320,6 +1358,7 @@ class PrubotWidget(QtGui.QWidget):
         vbox_loot.addWidget(self.loot_findcb)
         vbox_loot.addWidget(self.loot_lootcb)
         vbox_loot.addWidget(self.loot_reset)
+        vbox_loot.addWidget(self.loot_skincb)
         vbox_loot.addStretch(1)
 
         # Support
@@ -1454,6 +1493,24 @@ class PrubotWidget(QtGui.QWidget):
             # print 'main_loop checked is false, mlt quit'
             self.mlt._runflag_ = False
             # self.mlt.quit()
+
+    def hunt_kill_switch(self):
+        """Emergency kill switch to help run away
+        """
+
+        if self.cb_hunt_ks.isChecked() == True:
+            self.atk_atcb0.setCheckState = True
+            self.atk_chasecb.setCheckState = True
+            self.cb_cbot_wlkr.setCheckState = True
+            self.loot_findcb.setCheckState = True
+            self.loot_skincb.setCheckState = True
+        elif self.cb_hunt_ks.isChecked() == False:
+            self.atk_atcb0.setCheckState = False
+            self.atk_chasecb.setCheckState = False
+            self.cb_cbot_wlkr.setCheckState = False
+            self.loot_findcb.setCheckState = False
+            self.loot_skincb.setCheckState = False
+
 
     def sel_type(self, loc):
         # 'type' combox activated, select type
@@ -1674,7 +1731,7 @@ class PrubotWidget(QtGui.QWidget):
             if chase == 0:
                 targ = find_target()
                 # targ.Approach()
-                if player.DistanceTo(targ.Location) > 2:
+                if player.DistanceTo(targ.Location) >= 2:
                     targ.Approach()
 
             elif chase == 1:
@@ -1783,7 +1840,7 @@ class PrubotWidget(QtGui.QWidget):
         for i in range(0, len(self.loot_corpse_q)):
             # Opens on container 5, hopefully it's enough.
             c = self.loot_corpse_q.pop()
-            self.pqi.enq(3, ['use', [[c.X, c.Y, c.Z], 1000, 3, 5]])
+            self.pqi.enq(4, ['use', [[c.X, c.Y, c.Z], 1000, 3, 5]])
 
     def reset_loot_logic1(self):
         self.idx_rare = 0
@@ -1943,6 +2000,33 @@ class PrubotWidget(QtGui.QWidget):
         self.pqi.tryct[2] = 0
         self.corpse_cont.Close() # Should only occur if corpse is empty
 
+    def skinner_enq(self):
+        floor_tiles = get_floor_tiles()
+        for tile in floor_tiles:
+            tile_objs = list(tile.Objects)
+            # print [obj.Id for obj in tile_objs]
+            for t_obj in tile_objs:
+                if t_obj.Id in tid.skin_list:
+
+                    if t_obj.Id in tid.skin_obsidian:
+                        # 5908 - obsidian knife
+                        fsid = 5908
+                    elif t_obj.Id in tid.skin_stake:
+                        # 5942 - blessed wooden stake
+                        fsid = 5942
+                    elif t_obj.Id in tid.skin_fish:
+                        # 3483 - fishing rod
+                        fsid = 3483
+
+                    self.pqi.enq(3, ['hotkey', [fsid,
+                                                'crosshairs',
+                                                tile_to_world_loc(
+                                                    tile, find_player_tile()
+                                                    ), # This is a tuple
+                                                t_obj.Id,
+                                                t_obj.StackOrder
+                                                ]])
+
     def cavebot_logic(self):
 
         cb_conds = [self.pqi.isempty(), not player.IsWalking,
@@ -2001,6 +2085,7 @@ class PrubotWidget(QtGui.QWidget):
     def supp_eater(self):
         # 82 FF FF 00 00 00 8D 0E 00 00
         # 82 00 00 00 00 00 8D 0E 00 00
+        # mk_itemuse(flxyz, sid, fsp, idx)
         currtime = time()
         food = str(self.supp_eatcbx.currentText())
         conds = [not 'WithinProtectionZone' in get_statuses(player.Flags),
@@ -2009,8 +2094,10 @@ class PrubotWidget(QtGui.QWidget):
             ]
         if all(conds):
             food_id = tid.food_list[food]
-            pkt = mk_hotkey_pkt(food_id, 'none')
-            pkt.Send()
+            # Hotkey
+            # self.pqi.enq(2, ['use', [[65535, 0, 0], food_id, 0, 0]])
+            self.pqi.enq(2, ['hotkey', [food_id, 'none']])
+            self.foodtime = time()
         else:
             pass
 
@@ -2118,6 +2205,10 @@ class PrubotWidget(QtGui.QWidget):
             else: # No Corpse Open
                 pass
 
+        # Skinner
+        if self.loot_skincb.isChecked():
+            self.skinner_enq()
+
     def support(self):
 
         if self.supp_ev.isChecked() == True:
@@ -2174,6 +2265,41 @@ class PrubotWidget(QtGui.QWidget):
         self.wrt_dialog = CavebotWriterDialog()
         self.wrt_dialog.show()
 
+    def anti_stuck(self):
+        """Workaround for an unknown bug where player walker is stuck.
+        Player is shown in one location but is actually one square away. Is
+        likely a bug with 'goto' function
+        """
+        currtime = time()
+        conditions = [self.as_loc_old == player.Location,
+            player.IsWalking # , self.pqi.isempty()
+            ]
+
+        if self.as_loc_old != player.Location:
+            self.as_time = time()
+
+        if all(conditions):
+            if currtime > self.as_time + 60:
+                # Machete, on playertile, ground
+                # self.pqi.enq(3, ['hotkey', [3308, 'crosshairs',
+                #                             [player.X, player.Y, player.Z],
+                #                             454, 0]])
+                # 84 FF FF 00 00 00 14 17 00 D9 95 9B 10
+
+                self.pqi.enq(2, ['hotkey', [5908, 'yourself']])
+                # inc = 5
+                #
+                # mk_itemuse([player.X-inc, player.Y, player.Z], 0, 0, 0).Send()
+                # mk_itemuse([player.X+inc, player.Y, player.Z], 0, 0, 0).Send()
+                # mk_itemuse([player.X, player.Y+inc, player.Z], 0, 0, 0).Send()
+                # mk_itemuse([player.X, player.Y-inc, player.Z], 0, 0, 0).Send()
+
+                print 'PLAYER UNSTUCK'
+                self.as_time = time()
+
+        self.as_loc_old = player.Location
+
+
     def main_loop(self):
 
         self.update_plyrinfo()
@@ -2185,7 +2311,7 @@ class PrubotWidget(QtGui.QWidget):
         self.defense()
         self.pqi.deq() # Extra
         self.pqs.deq() # Extra
-        # self.defense()
+        self.defense()
 
         # self.bot_status = 'loot'
         self.looter()
@@ -2200,6 +2326,9 @@ class PrubotWidget(QtGui.QWidget):
         # self.tools()
 
         # self.scripts
+
+        # Misc
+        self.anti_stuck()
 
         self.pqi.deq()
         self.pqs.deq()
@@ -2255,6 +2384,8 @@ class PrubotWidget(QtGui.QWidget):
         # Support
         settings.setValue('supp_ev', self.supp_ev.checkState())
         settings.setValue('supp_gold', self.supp_gold.checkState())
+        settings.setValue('supp_eatcb', self.supp_gold.checkState())
+        settings.setValue('supp_eatcbx', self.supp_eatcbx.currentIndex())
 
         # Tools
         settings.setValue('tools_namespy', self.tools_namespy.checkState())
