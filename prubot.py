@@ -241,6 +241,30 @@ def find_corpse_cont():
     # print 'corpse_cont not found'
     return None
 
+def set_looter(bpid):
+    """Will find the loot container. Will return container and a list of the
+    loot bps inside
+    """
+
+    for i in inven.GetContainers():
+        count = 0
+        for j in list(i.GetItems()):
+            if j.Id == bpid:
+                count += 1
+
+            if count > 2: # Arbitrary limit
+                # Is the container with loot BP's
+                # Find loot bps
+                bp_list = []
+                for k in i.GetItems():
+                    if k.Id == bpid:
+                        bp_list.append(k)
+                return i, bp_list
+
+    # print 'loot_cont not found'
+    return None
+
+
 def find_target():
 
     for i in get_bl_creats():
@@ -1106,7 +1130,7 @@ class PrubotWidget(QtGui.QWidget):
         self.cb_main.stateChanged.connect(self.maincb_changed)
         self.connect(self.mlt, QtCore.SIGNAL('update()'), self.main_loop)
         self.cb_hunt_ks = QtGui.QCheckBox('Hunt Kill Switch', self)
-        self.cb_hunt_ks.setCheckState = True
+        self.cb_hunt_ks.setChecked(True)
         self.cb_hunt_ks.stateChanged.connect(self.hunt_kill_switch)
 
         # self.bot_status = None
@@ -1292,16 +1316,31 @@ class PrubotWidget(QtGui.QWidget):
         supp_eatgb.setLayout(vbox_eat)
 
         # Looter Section
+        self.loot_lbl = QtGui.QLabel('')
+        self.chng_loot_lbl('Not Ready')
         self.loot_findcb = QtGui.QCheckBox('Find Corpse On')
         self.loot_lootcb = QtGui.QCheckBox('Looter On')
-        self.loot_reset = QtGui.QPushButton('Reset Looter Count')
-        self.loot_reset.clicked.connect(self.reset_loot_logic1)
-        self.reset_loot_logic1()
+        self.loot_skincb = QtGui.QCheckBox('Skinner On')
+
+        # Shared between looters
         self.loot_cont = None
         self.loot_creats = []
         self.loot_corpse_q = []
-        self.loot_skincb = QtGui.QCheckBox('Skinner On')
+        self.loot_lootpb = QtGui.QPushButton('Looter PushButton')
 
+        # Loot logic 0
+        self.reset_loot_logic1()
+        self.loot_lootfxn = self.loot_logic0
+        self.loot_lootcb.stateChanged.connect(self.set_ll0_bps)
+        # self.loot_lootpb.clicked.connect(self.reset_loot_logic1)
+        self.ll0_time0 = 0 # Will be used to switch BP's
+
+        # Loot logic 1
+        # self.reset_loot_logic1()
+        # self.loot_lootfxn = self.loot_logic1
+        # self.loot_lootpb.clicked.connect(self.reset_loot_logic1)
+
+        # Tools Section
         self.tools_ls_cb = QtGui.QCheckBox('Level Spy')
         self.tools_ls_cb.stateChanged.connect(self.tools_ls_fxn)
         self.tools_ls_sb = QtGui.QSpinBox(self)
@@ -1310,6 +1349,9 @@ class PrubotWidget(QtGui.QWidget):
         self.tools_ls_sb.valueChanged.connect(self.tools_ls_fxn)
         self.tools_namespy = QtGui.QCheckBox('Namespy')
         self.tools_namespy.stateChanged.connect(self.tools_ns_sc)
+        self.tools_lighthack = QtGui.QCheckBox('Light Hack')
+        self.tools_lighthack.stateChanged.connect(self.tools_lh)
+
         tools_mwtimer = QtGui.QPushButton('Magic Wall Timer')
         tools_wgtimer = QtGui.QPushButton('Wild Growth Timer')
         script_test = QtGui.QPushButton('Script Test')
@@ -1355,9 +1397,10 @@ class PrubotWidget(QtGui.QWidget):
 
         # Auto-looter
         vbox_loot = QtGui.QVBoxLayout()
+        vbox_loot.addWidget(self.loot_lbl)
         vbox_loot.addWidget(self.loot_findcb)
         vbox_loot.addWidget(self.loot_lootcb)
-        vbox_loot.addWidget(self.loot_reset)
+        vbox_loot.addWidget(self.loot_lootpb)
         vbox_loot.addWidget(self.loot_skincb)
         vbox_loot.addStretch(1)
 
@@ -1408,7 +1451,7 @@ class PrubotWidget(QtGui.QWidget):
         hbox_tools_ls.addWidget(self.tools_ls_sb)
         vbox_tools.addLayout(hbox_tools_ls)
         vbox_tools.addWidget(self.tools_namespy)
-        vbox_tools.addWidget(self.tools_namespy)
+        vbox_tools.addWidget(self.tools_lighthack)
         vbox_tools.addWidget(tools_mwtimer)
         vbox_tools.addWidget(tools_wgtimer)
         vbox_tools.addStretch(1)
@@ -1433,6 +1476,7 @@ class PrubotWidget(QtGui.QWidget):
 
         grid0.addWidget(lbl_info, 0, 0)
         grid0.addWidget(self.cb_main, 0, 1)
+        grid0.addWidget(self.cb_hunt_ks, 0, 2)
         grid0.addLayout(hbox_info, 1, 0, 1, 3)
         grid0.addWidget(lbl_atk, 2, 0)
         grid0.addLayout(hbox_atk, 3, 0, 1, 2)
@@ -1499,18 +1543,17 @@ class PrubotWidget(QtGui.QWidget):
         """
 
         if self.cb_hunt_ks.isChecked() == True:
-            self.atk_atcb0.setCheckState = True
-            self.atk_chasecb.setCheckState = True
-            self.cb_cbot_wlkr.setCheckState = True
-            self.loot_findcb.setCheckState = True
-            self.loot_skincb.setCheckState = True
+            self.atk_atcb0.setChecked(True)
+            # self.atk_chasecb.setChecked(True)
+            self.cb_cbot_wlkr.setChecked(True)
+            self.loot_findcb.setChecked(True)
+            self.loot_skincb.setChecked(True)
         elif self.cb_hunt_ks.isChecked() == False:
-            self.atk_atcb0.setCheckState = False
-            self.atk_chasecb.setCheckState = False
-            self.cb_cbot_wlkr.setCheckState = False
-            self.loot_findcb.setCheckState = False
-            self.loot_skincb.setCheckState = False
-
+            self.atk_atcb0.setChecked(False)
+            self.atk_chasecb.setChecked(False)
+            self.cb_cbot_wlkr.setChecked(False)
+            self.loot_findcb.setChecked(False)
+            self.loot_skincb.setChecked(False)
 
     def sel_type(self, loc):
         # 'type' combox activated, select type
@@ -1838,9 +1881,36 @@ class PrubotWidget(QtGui.QWidget):
 
         # FIFO, list should be empty after this loop
         for i in range(0, len(self.loot_corpse_q)):
-            # Opens on container 5, hopefully it's enough.
+            # Opens on container 5, hopefully it's enough. Last arg = cont. #
+            # Think about opening it on container 10+
             c = self.loot_corpse_q.pop()
             self.pqi.enq(4, ['use', [[c.X, c.Y, c.Z], 1000, 3, 5]])
+
+    def chng_loot_lbl(self, text):
+        loot_lbl_str = 'Ltr Status: '
+        self.loot_lbl.setText(loot_lbl_str + text)
+
+    def set_ll0_bps(self):
+        """Sets loot logic 0 bps by finding container with number 15
+        """
+        # self.
+
+        if not inven.GetContainer(15):
+            self.reset_loot_logic1()
+
+            bpmain = inven.GetItemInSlot(3)
+            loc = bpmain.Location.ToLocation()
+            mk_itemuse([loc.X, loc.Y, loc.Z], bpmain.Id, 0, 15).Send()
+            # self.loot_cont_rares = inven.GetContainer(15)
+
+            # bp_rare = self.loot_bps[self.idx_rare]
+            # loc = bp_rare.Location.ToLocation()
+            # mk_itemuse([loc.X, loc.Y, loc.Z], bp_rare.Id, 0, 15).Send()
+
+            self.chng_loot_lbl('Loot SubConts Set')
+
+        # print
+        # self.loot_cont_rares = inven.GetContainer(15)
 
     def reset_loot_logic1(self):
         self.idx_rare = 0
@@ -1853,7 +1923,7 @@ class PrubotWidget(QtGui.QWidget):
         print 'Loot Logic1 Reset'
 
     def find_loot_cont(self, bpid):
-        """Find Loot Container.
+        """Find Loot Container
         """
         for i in inven.GetContainers():
             count = 0
@@ -1867,18 +1937,27 @@ class PrubotWidget(QtGui.QWidget):
         # print 'loot_cont not found'
         return None
 
-    def looter_ready(self):
-        """Looting Algorithm needs self.loot_cont preset.
-        Consider putting dependencies as function arguments
+    def is_readytoloot(self):
+        """Looting Algorithm needs:
+        -Loot Container with the sub bp's
+        -Container to count items
 
         Returns boolean
         """
-        self.loot_cont = self.find_loot_cont(9605)
-
-        if self.loot_cont == None:
+        # Container for Rares Set
+        self.loot_cont_rares = inven.GetContainer(15)
+        if self.loot_cont_rares == None:
+            self.chng_loot_lbl('Loot SubCont Missing')
             return False
-        else: # is Tibia.Objects.Container
+
+        try:
+            self.loot_cont, self.loot_bps = set_looter(9605)
+            self.chng_loot_lbl('Ready')
             return True
+        except:
+            self.chng_loot_lbl('Loot Cont Missing')
+            # self.loot_cont = set_looter(9605) # None Type
+            return False
 
     def get_loot_bps(self, bpid):
         """Assumes self.loot_cont is set.
@@ -1890,18 +1969,6 @@ class PrubotWidget(QtGui.QWidget):
             if i.Id == bpid:
                 bp_list.append(i)
         return bp_list
-
-    # def find_corpse_cont(self):
-    #
-    #     for i in inven.GetContainers():
-    #         if (not i.HasParent) and (i.Id != inven.GetItemInSlot(3).Id):
-    #             return i
-    #         elif (i.HasParent == True) and (i.Id in tid.loot_subcont):
-    #             # May cause a problem if moon bp or bag open
-    #             return i
-    #
-    #     # print 'corpse_cont not found'
-    #     return None
 
     def loot_enq_move(self, item, toloc):
         """Put a move item command in the pqi object.
@@ -1917,8 +1984,70 @@ class PrubotWidget(QtGui.QWidget):
 
     def loot_logic0(self):
         """Placeholder for future implementation
+        5 is reserved for corpses
+        15 for rares.
+        Will ignore stackables and commons for now.
+        Return after every statement
         """
-        pass
+        corpse_items = list(self.corpse_cont.GetItems())
+
+        # Check if any containers are full
+        cntrs = [self.loot_cont_rares]
+        for i in cntrs:
+            if i.Amount == i.Volume:
+                currtime = time()
+                if i == self.loot_cont_rares:
+                    if self.ll0_time0 < currtime - 2:
+                        if self.ll0_time0 < currtime - 60:
+                            self.idx_rare += 1
+                        self.ll0_time0 = time()
+                        bp = self.loot_bps[self.idx_rare]
+                        loc = bp.Location.ToLocation()
+                        self.pqi.enq(2, ['use',
+                                [[loc.X, loc.Y, loc.Z], bp.Id, 0, 15]])
+                elif False:
+                    pass
+                return
+
+        for i in corpse_items:
+            # print 'Scanning Corpse @ Item.Id: ', i.Id
+            if i.Id in tid.loot_gold:
+                bpmain_item = inven.GetItemInSlot(3)
+                self.loot_enq_move(i, bpmain_item.Location.ToLocation())
+                print 'Looting: ', tid.loot_list[i.Id]
+
+                return
+
+            elif i.Id in tid.loot_list: # and not in loot_gold
+
+                if (i.Id in tid.loot_rares) or (i.Id in tid.loot_commons):
+                    lootbp = self.loot_bps[self.idx_rare]
+                    # print 'LOOT BP SET 722'
+                elif i.Id in tid.loot_stack:
+                    lootbp = self.loot_bps[self.idx_stk]
+                    # print 'LOOT BP SET 725'
+
+                # set_trace()
+                self.loot_enq_move(i, lootbp.Location.ToLocation())
+                # i.Move(lootbp.Location, System.Byte(i.Count)) # IMPLEMENT PACKET!
+                print 'Looting: ', tid.loot_list[i.Id]
+
+                return
+
+            elif i == corpse_items[-1]: # At last item, and not in tid.loot_list
+                for j in corpse_items:
+                    if j.Id in tid.loot_subcont:
+                        # PQI Implementation should not be needed here
+                        j.OpenAsContainer(System.Byte(self.corpse_cont.Number))
+                        return
+
+                # No subcont
+                # PQI Implementation should not be needed here
+                self.pqi.tryct[2] = 0
+                self.corpse_cont.Close()
+                # Consider using an 'islooting' flag
+
+        self.corpse_cont.Close() # Should only occur if corpse is empty
 
     def loot_logic1(self):
         """Looting works by moving items into a variety of crown BP's
@@ -2117,6 +2246,14 @@ class PrubotWidget(QtGui.QWidget):
         elif self.tools_namespy.isChecked() == False:
             client.Map.NameSpyOff()
 
+    def tools_lh(self):
+        """LightHack StateChanged
+        """
+        if self.tools_lighthack.isChecked() == True:
+            client.Map.FullLightOn()
+        elif self.tools_lighthack.isChecked() == False:
+            client.Map.FullLightOff()
+
     def attack(self):
         if self.atk_cb.isChecked() == True:
             if player.TargetId:
@@ -2190,20 +2327,21 @@ class PrubotWidget(QtGui.QWidget):
 
         # Finds Corpses, enqs corpse
         if self.loot_findcb.isChecked():
-            self.find_corpse()
-            self.loot_enq_corpse()
+            self.find_corpse() # Puts dead monsters into a queue
+            self.loot_enq_corpse() # Uses tile with dead monsters
 
         # Container names: "Dead, remains, slain, lifeless nettle"
-        if self.loot_lootcb.isChecked() and self.looter_ready():
-            # self.corpse_cont = self.find_corpse_cont()
+        # cb checked and player's loot container is open
+        if self.loot_lootcb.isChecked() and self.is_readytoloot():
             self.corpse_cont = find_corpse_cont()
+            # self.loot_bps = self.get_loot_bps(9605)
             if self.corpse_cont: # Corpse container detected
                 if self.corpse_cont.IsOpen:
-                    self.loot_bps = self.get_loot_bps(9605)
-                    # self.loot_logic0()
-                    self.loot_logic1()
-            else: # No Corpse Open
-                pass
+                    self.loot_lootfxn()
+        elif not self.loot_lootcb.isChecked():
+            self.chng_loot_lbl('Off')
+        elif not self.looter_ready:
+            self.chng_loot_lbl('Not Ready')
 
         # Skinner
         if self.loot_skincb.isChecked():
@@ -2247,7 +2385,7 @@ class PrubotWidget(QtGui.QWidget):
         if self.wlkr != None:
             self.wlkr.restart()
             self.cavebot_setcwlbl()
-            self.cb_cbot_wlkr.setCheckState(False)
+            self.cb_cbot_wlkr.setChecked(False)
 
     def cavebot_walker(self):
         if self.cb_cbot_wlkr.isChecked() == True:
@@ -2389,6 +2527,7 @@ class PrubotWidget(QtGui.QWidget):
 
         # Tools
         settings.setValue('tools_namespy', self.tools_namespy.checkState())
+        settings.setValue('tools_lighthack', self.tools_lighthack.checkState())
 
         # Spaceholder for next section
 
@@ -2400,7 +2539,7 @@ class PrubotWidget(QtGui.QWidget):
 
         settings = QtCore.QSettings(fname, QtCore.QSettings.IniFormat)
 
-        self.cb_main.setCheckState = False
+        self.cb_main.setChecked(False)
 
         for key in settings.allKeys():
             key = str(key)
@@ -2411,7 +2550,7 @@ class PrubotWidget(QtGui.QWidget):
             if type(obj) == QtGui.QPushButton:
                 pass # Future implementation
             elif type(obj) == QtGui.QCheckBox:
-                obj.setCheckState(QtCore.Qt.CheckState(
+                obj.setChecked(QtCore.Qt.CheckState(
                     settings.value(key).toPyObject()
                     ))
             elif type(obj) == QtGui.QSpinBox:

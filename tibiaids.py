@@ -144,7 +144,8 @@ loot_commons = {
     2995: 'piggy bank',
     # 3053: 'time ring',
     7290: 'shard',
-    647: 'seeds'
+    647: 'seeds',
+    3574: 'mystic turban'
     }
 
 loot_rares = {
@@ -161,7 +162,7 @@ loot_rares = {
     3332: 'hammer of wrath',
     7452: 'spiked squelcher',
     7421: 'onyx flail',
-    7430: 'dragonbone staff',
+    # 7430: 'dragonbone staff',
     3348: 'banana staff',
     3341: 'arcane staff',
     3324: 'skull staff',
