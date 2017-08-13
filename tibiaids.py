@@ -32,7 +32,7 @@ loot_stack = {
     # 10282: 'hydra head',
     10304: 'hellspawn tail',
     # 10313: 'winged tail',
-    10309: 'strand of medusa hair',
+    # 10309: 'strand of medusa hair',
     10310: 'shiny stone',
     10408: 'spiked iron ball',
     10409: 'corrupted flag',
@@ -262,8 +262,8 @@ loot_rares = {
     4033: 'draken boots',
 
     # Decoration
-    7396: 'behemoth trophy',
-    7399: 'dragon lord trophy',
+    # 7396: 'behemoth trophy',
+    # 7399: 'dragon lord trophy',
     10419: 'lizard trophy',
     7393: 'demon trophy',
 

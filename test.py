@@ -958,6 +958,7 @@ def tool_mwt_fxn():
     #     Tibia.Constants.ClientFont.NormalBorder,
     #     '12345'
     #     )
+    # Draw once, then update it.
     # is ready but something wrong with pipe.
     # Freezing here.  client.Dll.PipeIsReady.WaitOne()
     # Could send packet yourself
@@ -967,6 +968,9 @@ def tool_mwt_fxn():
     # http://tpforums.org/forum/archive/index.php/t-1057.html
 
     # System.InvalidOperationException: Pipe hasn't been connected yet.
+    # Pipe is not connected, but can't figure out at which point the event isn't working
+    # client.Dll.InitializePipe()
+    # client.Dll.PipeIsReady.WaitOne()
     Tibia.Packets.Pipes.DisplayCreatureTextPacket.Send(
         client,
         System.UInt32(player.Id),
@@ -977,14 +981,62 @@ def tool_mwt_fxn():
         'HELLO WORLD'
         )
 
+def my_hndlr(type, data):
+
+    pass
+
+def splt_pkt_frm_server():
+    void SplitMessageFromServer(byte type, byte[] data)
+    {
+        if (uxLogServer.Checked)
+        {
+            if (FilterPacket(type, true))
+            {
+                LogPacket(data, "SERVER", "CLIENT");
+            }
+        }
+    }
+
+def splt_pkt_frm_client():
+    void SplitMessageFromServer(byte type, byte[] data)
+    {
+        if (uxLogServer.Checked)
+        {
+            if (FilterPacket(type, true))
+            {
+                LogPacket(data, "SERVER", "CLIENT");
+            }
+        }
+    }
+
+def pxy_test():
+    """
+    """
+    client.IO.StartProxy()
+
+    proxy = client.IO.Proxy
+
+    # proxy.ReceivedTextMessageIncomingPacket += Tibia.Packets.Proxy.IncomingPacketListener(Proxy_ReceivedTextMessageIncomingPacket)
+    # https://pythonnet.github.io/ # do a delegate
+    # http://pythonnet.sourceforge.net/readme.html#delegates
+    proxy.SplitPacketFromServer += SplitMessageFromServer
+    proxy.SplitPacketFromClient += SplitMessageFromClient
+
+    client.IO.Proxy.SplitPacketFromServer += delegate(byte type, byte[] data)
+
+    bool Proxy_ReceivedTextMessageIncomingPacket(IncomingPacket packet)
+        Tibia.Packets.Incoming.TextMessagePacket p = (Tibia.Packets.Incoming.TextMessagePacket)packet;
+        return true;
+
+
 if __name__ == '__main__':
-    thing = TestObject()
-    while True:
-        sleep(0.1)
+    # thing = TestObject()
+    # while True:
+        # sleep(0.1)
         # floor_tiles = list(client.Map.GetTilesOnSameFloor())
         # test_fxn()
         # mana_sit()
-        thing.main_loop()
+        # thing.main_loop()
     # ref()
     # skin_test()
-    # tool_mwt_fxn()
+    tool_mwt_fxn()

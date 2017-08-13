@@ -1332,7 +1332,7 @@ class PrubotWidget(QtGui.QWidget):
         self.reset_loot_logic1()
         self.loot_lootfxn = self.loot_logic0
         self.loot_lootcb.stateChanged.connect(self.set_ll0_bps)
-        # self.loot_lootpb.clicked.connect(self.reset_loot_logic1)
+        self.loot_lootpb.clicked.connect(self.reset_loot_logic1)
         self.ll0_time0 = 0 # Will be used to switch BP's
 
         # Loot logic 1
@@ -1898,16 +1898,21 @@ class PrubotWidget(QtGui.QWidget):
         if not inven.GetContainer(15):
             self.reset_loot_logic1()
 
-            bpmain = inven.GetItemInSlot(3)
-            loc = bpmain.Location.ToLocation()
-            mk_itemuse([loc.X, loc.Y, loc.Z], bpmain.Id, 0, 15).Send()
+            try:
+                cntr, bps = set_looter(9605)
+                bp = bps[self.idx_rare]
+            except:
+                bp = inven.GetItemInSlot(3)
+
+            loc = bp.Location.ToLocation()
+            mk_itemuse([loc.X, loc.Y, loc.Z], bp.Id, 0, 15).Send()
             # self.loot_cont_rares = inven.GetContainer(15)
 
             # bp_rare = self.loot_bps[self.idx_rare]
             # loc = bp_rare.Location.ToLocation()
             # mk_itemuse([loc.X, loc.Y, loc.Z], bp_rare.Id, 0, 15).Send()
 
-            self.chng_loot_lbl('Loot SubConts Set')
+            self.chng_loot_lbl('Loot SubConts Opened')
 
         # print
         # self.loot_cont_rares = inven.GetContainer(15)
@@ -2340,7 +2345,7 @@ class PrubotWidget(QtGui.QWidget):
                     self.loot_lootfxn()
         elif not self.loot_lootcb.isChecked():
             self.chng_loot_lbl('Off')
-        elif not self.looter_ready:
+        elif not self.is_readytoloot():
             self.chng_loot_lbl('Not Ready')
 
         # Skinner

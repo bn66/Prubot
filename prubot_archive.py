@@ -296,6 +296,8 @@ def inven_test():
     # (0, 0, 3055L, 1, 0)
     # Other containers First Container (containerId, +1, ID, containerid+64, +1)
     # Other containers Second Container (containerId, +1, ID, containerid+64, +1)
+    """THERE ARE ONLY 16 CONTAINER SLOTS AVAILABLE IN Tibia CLIENT 0-15
+    """
 
 def plyr_idtype_ref():
     """Havne't figured out what these are yet
