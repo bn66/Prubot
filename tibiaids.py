@@ -28,11 +28,11 @@ loot_stack = {
     5944: 'soul orb',
     9636: 'fiery heart',
     9665: 'wyrm scale',
-    9694: 'snake skin',
+    # 9694: 'snake skin',
     # 10282: 'hydra head',
     10304: 'hellspawn tail',
-    10313: 'winged tail',
-    10309: 'strand of medusa hair',
+    # 10313: 'winged tail',
+    # 10309: 'strand of medusa hair',
     10310: 'shiny stone',
     10408: 'spiked iron ball',
     10409: 'corrupted flag',
@@ -144,7 +144,8 @@ loot_commons = {
     2995: 'piggy bank',
     # 3053: 'time ring',
     7290: 'shard',
-    647: 'seeds'
+    647: 'seeds',
+    3574: 'mystic turban'
     }
 
 loot_rares = {
@@ -161,7 +162,7 @@ loot_rares = {
     3332: 'hammer of wrath',
     7452: 'spiked squelcher',
     7421: 'onyx flail',
-    7430: 'dragonbone staff',
+    # 7430: 'dragonbone staff',
     3348: 'banana staff',
     3341: 'arcane staff',
     3324: 'skull staff',
@@ -212,7 +213,7 @@ loot_rares = {
     5741: 'skull helmet',
 
     # Necklaces:
-    # 3055: 'platinum amulet',
+    # 3055: 'f amulet',
     3016: 'ruby necklace',
 
     # Rings
@@ -261,8 +262,8 @@ loot_rares = {
     4033: 'draken boots',
 
     # Decoration
-    7396: 'behemoth trophy',
-    7399: 'dragon lord trophy',
+    # 7396: 'behemoth trophy',
+    # 7399: 'dragon lord trophy',
     10419: 'lizard trophy',
     7393: 'demon trophy',
 
@@ -991,6 +992,16 @@ tool_list = {
     'sneaky stabber of eliteness': 9594,
     'squeezing gear of girlpower': 9596,
     'whacking driller of fate': 9598
+    }
+
+# Food list to use for the eater
+food_list = {
+    'fire mushroom': 3731,
+    'meat': 3577,
+    'fish': 3578,
+    'ham': 3582,
+    'dragon ham': 3583,
+    'brown mushroom': 3725
     }
 
 # Chose List over dictionary because it was easier to pick by spell name
